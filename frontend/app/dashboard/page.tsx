@@ -4,18 +4,16 @@ import { useState } from "react";
 import {
   Plus,
   Search,
-  Filter,
-  ArrowUpDown,
   Inbox,
   TrendingUp,
   Wallet,
   Scale,
+  Activity,
 } from "lucide-react";
 import DealCard from "@/components/DealCard";
 import CreateDealModal from "@/components/CreateDealModal";
 import type { DealStatus } from "@/lib/contracts";
 
-// Demo data — replace with on-chain reads via wagmi useReadContract
 const DEMO_DEALS = [
   {
     id: 0,
@@ -74,7 +72,6 @@ export default function DashboardPage() {
   const [filter, setFilter] = useState<"all" | "active" | "completed" | "disputed">("all");
   const [search, setSearch] = useState("");
 
-  // In production, currentUser comes from useAccount()
   const currentUser = "0x1234567890abcdef1234567890abcdef12345678";
 
   const filteredDeals = DEMO_DEALS.filter((deal) => {
@@ -99,70 +96,76 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="max-w-7xl mx-auto px-6 py-10">
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
         {[
           {
             label: "Active Deals",
             value: stats.active,
             icon: <Wallet className="w-4 h-4" />,
             color: "text-blue-400",
+            bg: "bg-blue-400/10",
           },
           {
             label: "Completed",
             value: stats.completed,
             icon: <TrendingUp className="w-4 h-4" />,
-            color: "text-green-400",
+            color: "text-emerald-400",
+            bg: "bg-emerald-400/10",
           },
           {
             label: "Disputes",
             value: stats.disputed,
             icon: <Scale className="w-4 h-4" />,
             color: "text-red-400",
+            bg: "bg-red-400/10",
           },
           {
             label: "Total Volume",
             value: stats.volume,
-            icon: <ArrowUpDown className="w-4 h-4" />,
+            icon: <Activity className="w-4 h-4" />,
             color: "text-vault-400",
+            bg: "bg-vault-400/10",
           },
         ].map((stat) => (
-          <div key={stat.label} className="card">
-            <div className="flex items-center gap-2 mb-2">
-              <span className={stat.color}>{stat.icon}</span>
-              <span className="text-sm text-dark-400">{stat.label}</span>
+          <div key={stat.label} className="glass-subtle p-5">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className={`w-8 h-8 rounded-lg ${stat.bg} flex items-center justify-center ${stat.color}`}>
+                {stat.icon}
+              </div>
+              <span className="text-[13px] text-dark-400 font-medium">{stat.label}</span>
             </div>
-            <div className="text-2xl font-bold text-white">{stat.value}</div>
+            <div className="text-2xl font-extrabold text-white tracking-tight">{stat.value}</div>
           </div>
         ))}
       </div>
 
       {/* Header + Filters */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-white">My Deals</h1>
+        <h1 className="text-2xl font-bold text-white tracking-tight">My Deals</h1>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
           <div className="relative flex-1 md:flex-initial">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-500" />
             <input
               type="text"
               placeholder="Search deals..."
-              className="input-field !pl-10 !py-2 text-sm md:w-64"
+              className="input-field !pl-10 !py-2.5 text-sm md:w-72"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
 
-          <div className="flex items-center gap-1 bg-dark-800 rounded-xl p-1">
+          <div className="flex items-center gap-0.5 glass-subtle !rounded-xl p-1">
             {(["all", "active", "completed", "disputed"] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors capitalize ${
+                className={`px-3.5 py-2 text-xs font-semibold rounded-lg transition-all duration-200 capitalize ${
                   filter === f
-                    ? "bg-vault-600 text-white"
-                    : "text-dark-400 hover:text-white"
+                    ? "bg-vault-600 text-white shadow-sm shadow-vault-600/25"
+                    : "text-dark-400 hover:text-white hover:bg-white/[0.04]"
                 }`}
               >
                 {f}
@@ -170,7 +173,7 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          <button onClick={() => setShowCreate(true)} className="btn-primary text-sm !py-2 !px-4">
+          <button onClick={() => setShowCreate(true)} className="btn-primary !text-sm !py-2.5 !px-5">
             <Plus className="w-4 h-4" />
             New
           </button>
@@ -179,12 +182,14 @@ export default function DashboardPage() {
 
       {/* Deals Grid */}
       {filteredDeals.length === 0 ? (
-        <div className="card text-center py-16">
-          <Inbox className="w-12 h-12 text-dark-600 mx-auto mb-4" />
+        <div className="glass text-center py-20 px-8">
+          <div className="w-16 h-16 rounded-2xl bg-dark-800/50 flex items-center justify-center mx-auto mb-5">
+            <Inbox className="w-8 h-8 text-dark-600" />
+          </div>
           <h3 className="text-lg font-semibold text-dark-300 mb-2">No deals found</h3>
-          <p className="text-sm text-dark-500 mb-6">
+          <p className="text-sm text-dark-500 mb-8 max-w-sm mx-auto">
             {filter !== "all"
-              ? "Try changing your filter"
+              ? "Try changing your filter to see more deals"
               : "Create your first escrow deal to get started"}
           </p>
           <button onClick={() => setShowCreate(true)} className="btn-primary">
