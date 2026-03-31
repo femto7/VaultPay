@@ -219,6 +219,7 @@ export function useFundDeal() {
       functionName: "fundDeal",
       args: [BigInt(dealId)],
       value: totalWei,
+      gas: BigInt(300_000),
     });
   }
 
@@ -253,6 +254,7 @@ export function useReleaseFunds() {
       abi: VAULTPAY_ABI,
       functionName: "releaseFunds",
       args: [BigInt(dealId)],
+      gas: BigInt(300_000),
     });
   }
 
@@ -270,6 +272,7 @@ export function useOpenDispute() {
       abi: VAULTPAY_ABI,
       functionName: "openDispute",
       args: [BigInt(dealId), reason, evidence],
+      gas: BigInt(500_000),
     });
   }
 
@@ -287,6 +290,7 @@ export function useClaimRefund() {
       abi: VAULTPAY_ABI,
       functionName: "claimRefund",
       args: [BigInt(dealId)],
+      gas: BigInt(300_000),
     });
   }
 
@@ -355,6 +359,7 @@ export function useSubmitVote() {
       abi: VAULTPAY_ABI,
       functionName: "submitVote",
       args: [BigInt(dealId), sellerPercent],
+      gas: BigInt(300_000),
     });
   }
 
@@ -372,6 +377,7 @@ export function useFinalizeDispute() {
       abi: VAULTPAY_ABI,
       functionName: "finalizeDispute",
       args: [BigInt(dealId)],
+      gas: BigInt(500_000),
     });
   }
 
