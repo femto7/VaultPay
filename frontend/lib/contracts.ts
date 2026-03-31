@@ -122,6 +122,7 @@ export const VAULTPAY_ABI = [
           { name: "token", type: "address" },
           { name: "amount", type: "uint256" },
           { name: "fee", type: "uint256" },
+          { name: "deliveryDays", type: "uint256" },
           { name: "createdAt", type: "uint256" },
           { name: "fundedAt", type: "uint256" },
           { name: "deliveryDeadline", type: "uint256" },

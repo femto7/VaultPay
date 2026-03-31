@@ -18,7 +18,7 @@ function useContractAddress() {
 function parseDeal(id: number, raw: unknown): Deal {
   const r = raw as {
     buyer: string; seller: string; token: string;
-    amount: bigint; fee: bigint;
+    amount: bigint; fee: bigint; deliveryDays: bigint;
     createdAt: bigint; fundedAt: bigint;
     deliveryDeadline: bigint; disputeDeadline: bigint;
     title: string; description: string; status: number;
