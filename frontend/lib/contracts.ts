@@ -4,7 +4,7 @@
 export const VAULTPAY_ADDRESS = {
   base: "0x0000000000000000000000000000000000000000" as `0x${string}`,
   arbitrum: "0x0000000000000000000000000000000000000000" as `0x${string}`,
-  baseSepolia: "0xa29700f03B19Fb0CEE070035c53914967C5eC515" as `0x${string}`,
+  baseSepolia: "0x6b29e0CFBA470c23355191010B938d1d058aa69f" as `0x${string}`,
 } as const;
 
 export const DEAL_STATUS = [
