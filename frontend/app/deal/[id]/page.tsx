@@ -418,13 +418,25 @@ export default function DealPage({ params }: { params: { id: string } }) {
               </div>
               <div>
                 <p className="text-[11px] text-surface-600 mb-1">Delivery Deadline</p>
-                <p className="text-sm text-white font-medium">{formatDate(deal.deliveryDeadline)}</p>
-                <p className="text-[11px] text-vault-400 mt-0.5">{timeRemaining(deal.deliveryDeadline)}</p>
+                {deal.deliveryDeadline > 0 ? (
+                  <>
+                    <p className="text-sm text-white font-medium">{formatDate(deal.deliveryDeadline)}</p>
+                    <p className="text-[11px] text-vault-400 mt-0.5">{timeRemaining(deal.deliveryDeadline)}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-surface-600">Starts on funding</p>
+                )}
               </div>
               <div>
                 <p className="text-[11px] text-surface-600 mb-1">Dispute Window</p>
-                <p className="text-sm text-white font-medium">{formatDate(deal.disputeDeadline)}</p>
-                <p className="text-[11px] text-amber-400 mt-0.5">{timeRemaining(deal.disputeDeadline)}</p>
+                {deal.disputeDeadline > 0 ? (
+                  <>
+                    <p className="text-sm text-white font-medium">{formatDate(deal.disputeDeadline)}</p>
+                    <p className="text-[11px] text-amber-400 mt-0.5">{timeRemaining(deal.disputeDeadline)}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-surface-600">—</p>
+                )}
               </div>
             </div>
           </div>

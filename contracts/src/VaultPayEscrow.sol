@@ -27,6 +27,7 @@ contract VaultPayEscrow is ReentrancyGuard {
         address token;           // ERC20 token address (address(0) = native ETH)
         uint256 amount;
         uint256 fee;             // Protocol fee amount (pre-computed at deal creation)
+        uint256 deliveryDays;    // Delivery window in days (set at creation)
         uint256 createdAt;
         uint256 fundedAt;
         uint256 deliveryDeadline;
@@ -185,6 +186,7 @@ contract VaultPayEscrow is ReentrancyGuard {
             token: _token,
             amount: _amount,
             fee: fee,
+            deliveryDays: _deliveryDays,
             createdAt: block.timestamp,
             fundedAt: 0,
             deliveryDeadline: 0,
@@ -221,7 +223,7 @@ contract VaultPayEscrow is ReentrancyGuard {
         }
 
         deal.fundedAt = block.timestamp;
-        deal.deliveryDeadline = block.timestamp + REFUND_TIMEOUT;
+        deal.deliveryDeadline = block.timestamp + deal.deliveryDays * 1 days;
         deal.status = DealStatus.Funded;
 
         emit DealFunded(dealId, totalRequired);
