@@ -12,7 +12,7 @@ import {
   RefreshCw,
   Ban,
 } from "lucide-react";
-import { STATUS_COLORS, type DealStatus } from "@/lib/contracts";
+import { type DealStatus } from "@/lib/contracts";
 import { shortenAddress, timeRemaining } from "@/lib/utils";
 
 interface DealCardProps {
@@ -38,26 +38,15 @@ const STATUS_ICONS: Record<DealStatus, React.ReactNode> = {
   Cancelled: <Ban className="w-3 h-3" />,
 };
 
-const STATUS_TEXT_COLORS: Record<DealStatus, string> = {
-  Created: "text-dark-300",
-  Funded: "text-blue-400",
-  Delivered: "text-amber-400",
-  Released: "text-emerald-400",
-  Disputed: "text-red-400",
-  Resolved: "text-purple-400",
-  Refunded: "text-orange-400",
-  Cancelled: "text-dark-500",
-};
-
-const STATUS_BG: Record<DealStatus, string> = {
-  Created: "bg-dark-500/15",
-  Funded: "bg-blue-500/12",
-  Delivered: "bg-amber-500/12",
-  Released: "bg-emerald-500/12",
-  Disputed: "bg-red-500/12",
-  Resolved: "bg-purple-500/12",
-  Refunded: "bg-orange-500/12",
-  Cancelled: "bg-dark-600/12",
+const STATUS_STYLES: Record<DealStatus, { text: string; bg: string }> = {
+  Created: { text: "text-surface-800", bg: "bg-surface-400/20" },
+  Funded: { text: "text-blue-400", bg: "bg-blue-500/10" },
+  Delivered: { text: "text-amber-400", bg: "bg-amber-500/10" },
+  Released: { text: "text-emerald-400", bg: "bg-emerald-500/10" },
+  Disputed: { text: "text-red-400", bg: "bg-red-500/10" },
+  Resolved: { text: "text-violet-400", bg: "bg-violet-500/10" },
+  Refunded: { text: "text-orange-400", bg: "bg-orange-500/10" },
+  Cancelled: { text: "text-surface-600", bg: "bg-surface-500/10" },
 };
 
 export default function DealCard({
@@ -71,62 +60,64 @@ export default function DealCard({
   deadline,
   currentUser,
 }: DealCardProps) {
+  const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
   const isBuyer = currentUser?.toLowerCase() === buyer.toLowerCase();
+  const isOpenListing = buyer.toLowerCase() === ZERO_ADDRESS;
   const role = isBuyer ? "Buyer" : "Seller";
   const counterparty = isBuyer ? seller : buyer;
+  const style = STATUS_STYLES[status];
 
   return (
     <Link href={`/deal/${id}`}>
-      <div className="card-hover group relative overflow-hidden">
-        {/* Top accent line */}
-        <div
-          className={`absolute top-0 left-0 right-0 h-[2px] ${STATUS_COLORS[status]} opacity-40 group-hover:opacity-70 transition-opacity`}
-        />
-
-        <div className="flex items-start justify-between mb-5">
+      <div className="card-hover group relative overflow-hidden h-full">
+        <div className="flex items-start justify-between mb-4">
           <div className="flex-1 min-w-0 pr-3">
-            <h3 className="text-[15px] font-semibold text-white truncate group-hover:text-vault-300 transition-colors duration-200">
+            <h3 className="text-sm font-semibold text-white truncate group-hover:text-vault-400 transition-colors">
               {title}
             </h3>
-            <p className="text-xs text-dark-500 mt-1 font-mono">Deal #{id}</p>
+            <p className="text-[11px] text-surface-600 mt-0.5 font-mono">#{id}</p>
           </div>
 
-          <div className={`status-badge ${STATUS_BG[status]} ${STATUS_TEXT_COLORS[status]}`}>
+          <div className={`status-badge ${style.bg} ${style.text}`}>
             {STATUS_ICONS[status]}
             {status}
           </div>
         </div>
 
-        <div className="mb-5">
-          <span className="text-2xl font-extrabold text-white tracking-tight">
+        <div className="mb-4">
+          <span className="text-xl font-bold text-white tracking-tight">
             {amount}
           </span>
-          <span className="text-sm text-dark-400 font-medium ml-2">{token}</span>
+          <span className="text-xs text-surface-700 font-medium ml-1.5">{token}</span>
         </div>
 
-        <div className="flex items-center justify-between text-[13px] mb-4">
-          <div className="flex items-center gap-2 text-dark-400">
-            <div className="w-5 h-5 rounded-full bg-white/[0.05] flex items-center justify-center">
-              <User className="w-3 h-3" />
+        <div className="flex items-center justify-between text-[12px] mb-3">
+          <div className="flex items-center gap-2 text-surface-700">
+            <div className="w-5 h-5 rounded-md bg-white/[0.04] flex items-center justify-center">
+              <User className="w-2.5 h-2.5" />
             </div>
             <span>
               {role} &middot;{" "}
-              <span className="font-mono text-dark-300">
-                {shortenAddress(counterparty)}
-              </span>
+              {isOpenListing && !isBuyer ? (
+                <span className="text-vault-400 font-medium">Open listing</span>
+              ) : (
+                <span className="font-mono text-surface-800">
+                  {shortenAddress(counterparty)}
+                </span>
+              )}
             </span>
           </div>
 
           {deadline > 0 && (
-            <div className="flex items-center gap-1.5 text-dark-500 text-xs">
+            <div className="flex items-center gap-1 text-surface-600 text-[11px]">
               <Clock className="w-3 h-3" />
               <span>{timeRemaining(deadline)}</span>
             </div>
           )}
         </div>
 
-        <div className="pt-4 border-t border-white/[0.04] flex items-center justify-end">
-          <span className="text-xs text-vault-400 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-1 group-hover:translate-x-0">
+        <div className="pt-3 border-t border-white/[0.05] flex items-center justify-end">
+          <span className="text-[11px] text-vault-400 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-x-1 group-hover:translate-x-0 font-medium">
             View deal <ArrowUpRight className="w-3 h-3" />
           </span>
         </div>

@@ -4,6 +4,7 @@
 export const VAULTPAY_ADDRESS = {
   base: "0x0000000000000000000000000000000000000000" as `0x${string}`,
   arbitrum: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+  baseSepolia: "0xa29700f03B19Fb0CEE070035c53914967C5eC515" as `0x${string}`,
 } as const;
 
 export const DEAL_STATUS = [
@@ -20,14 +21,14 @@ export const DEAL_STATUS = [
 export type DealStatus = (typeof DEAL_STATUS)[number];
 
 export const STATUS_COLORS: Record<DealStatus, string> = {
-  Created: "bg-dark-500",
+  Created: "bg-surface-500",
   Funded: "bg-blue-500",
   Delivered: "bg-amber-500",
-  Released: "bg-green-500",
+  Released: "bg-emerald-500",
   Disputed: "bg-red-500",
-  Resolved: "bg-purple-500",
+  Resolved: "bg-violet-500",
   Refunded: "bg-orange-500",
-  Cancelled: "bg-dark-600",
+  Cancelled: "bg-surface-600",
 };
 
 export interface Deal {
@@ -51,7 +52,7 @@ export const VAULTPAY_ABI = [
     type: "function",
     name: "createDeal",
     inputs: [
-      { name: "_seller", type: "address" },
+      { name: "_buyer", type: "address" },
       { name: "_token", type: "address" },
       { name: "_amount", type: "uint256" },
       { name: "_deliveryDays", type: "uint256" },
@@ -209,6 +210,93 @@ export const VAULTPAY_ABI = [
     inputs: [
       { name: "dealId", type: "uint256", indexed: true },
       { name: "sellerPercent", type: "uint8", indexed: false },
+    ],
+  },
+  // ── Community Reviewer Pool ──────────────────────────────────────────────
+  {
+    type: "function",
+    name: "registerAsReviewer",
+    inputs: [],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "removeFromPool",
+    inputs: [],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "submitVote",
+    inputs: [
+      { name: "dealId", type: "uint256" },
+      { name: "sellerPercent", type: "uint8" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "finalizeDispute",
+    inputs: [{ name: "dealId", type: "uint256" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "getDisputeVoting",
+    inputs: [{ name: "dealId", type: "uint256" }],
+    outputs: [
+      { name: "reviewers", type: "address[5]" },
+      { name: "hasVoted", type: "bool[5]" },
+      { name: "votes", type: "uint8[5]" },
+      { name: "deadline", type: "uint256" },
+      { name: "finalized", type: "bool" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getReviewerPool",
+    inputs: [],
+    outputs: [{ name: "", type: "address[]" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "isReviewer",
+    inputs: [{ name: "", type: "address" }],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "event",
+    name: "ReviewerRegistered",
+    inputs: [{ name: "reviewer", type: "address", indexed: true }],
+  },
+  {
+    type: "event",
+    name: "ReviewerRemoved",
+    inputs: [{ name: "reviewer", type: "address", indexed: true }],
+  },
+  {
+    type: "event",
+    name: "VoteSubmitted",
+    inputs: [
+      { name: "dealId", type: "uint256", indexed: true },
+      { name: "reviewer", type: "address", indexed: true },
+      { name: "sellerPercent", type: "uint8", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "DisputeFinalized",
+    inputs: [
+      { name: "dealId", type: "uint256", indexed: true },
+      { name: "sellerPercent", type: "uint8", indexed: false },
+      { name: "voterCount", type: "uint256", indexed: false },
     ],
   },
 ] as const;
