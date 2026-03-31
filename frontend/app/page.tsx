@@ -205,7 +205,7 @@ function HowItWorks() {
     { num: "01", icon: <FileCheck className="w-5 h-5" />, title: "Create a Deal", desc: "Set amount, deadline, and terms. Leave buyer blank for an open listing anyone can fund.", color: "#3b82f6" },
     { num: "02", icon: <Wallet className="w-5 h-5" />, title: "Fund the Escrow", desc: "Buyer locks ETH or USDC in the contract. Funds are immutably held — neither party can touch them.", color: "#8b5cf6" },
     { num: "03", icon: <CheckCircle2 className="w-5 h-5" />, title: "Deliver & Release", desc: "Seller delivers, buyer confirms. Funds release instantly. No bank, no wait, no middleman.", color: "#a78bfa" },
-    { num: "04", icon: <Scale className="w-5 h-5" />, title: "Dispute if Needed", desc: "Something went wrong? An arbiter reviews on-chain evidence and splits funds proportionally.", color: "#c084fc" },
+    { num: "04", icon: <Scale className="w-5 h-5" />, title: "Dispute if Needed", desc: "Something went wrong? A panel of 5 community reviewers votes on the outcome and splits funds proportionally.", color: "#c084fc" },
   ];
 
   return (
@@ -286,7 +286,7 @@ function Features() {
   const features = [
     { icon: <Lock className="w-5 h-5" />, title: "Non-Custodial", desc: "Funds held by immutable smart contracts. No admin keys, no backdoors, no rug pulls.", c: "#60a5fa" },
     { icon: <Eye className="w-5 h-5" />, title: "Fully Transparent", desc: "Every deal is on-chain. Verify fund status, contract code, and history anytime.", c: "#22d3ee" },
-    { icon: <Scale className="w-5 h-5" />, title: "Fair Disputes", desc: "Arbiters split funds proportionally based on evidence. Not all-or-nothing.", c: "#c084fc" },
+    { icon: <Scale className="w-5 h-5" />, title: "Fair Disputes", desc: "Community reviewers vote to split funds proportionally based on evidence. Not all-or-nothing.", c: "#c084fc" },
     { icon: <Clock className="w-5 h-5" />, title: "Auto-Refund", desc: "Seller ghosts? After 14 days, buyer claims full automatic refund. Zero admin.", c: "#fbbf24" },
     { icon: <Zap className="w-5 h-5" />, title: "Instant Settlement", desc: "Built on L2. Sub-second confirmations, gas under $0.01 per transaction.", c: "#34d399" },
     { icon: <ShieldCheck className="w-5 h-5" />, title: "Audited & Minimal", desc: "~250 lines of Solidity. No proxy, no upgradeability. Pure verifiable logic.", c: "#fb7185" },
@@ -435,7 +435,7 @@ function UseCases() {
 function FAQ() {
   const faqs = [
     { q: "What happens if the seller never delivers?", a: "After the delivery deadline (default 14 days), the buyer can claim a full refund directly from the smart contract. No admin intervention needed." },
-    { q: "How are disputes resolved?", a: "An impartial arbiter reviews evidence submitted by both parties and decides a fair split (e.g. 60% seller / 40% buyer). Partial deliveries get partial payment." },
+    { q: "How are disputes resolved?", a: "A panel of 5 community reviewers is selected randomly from the reviewer pool. They vote (0%, 50%, or 100% to seller) within 48h based on evidence submitted on-chain. Majority wins." },
     { q: "Is my money safe?", a: "Funds are held by an immutable smart contract on-chain. The code is verified on Basescan/Arbiscan and anyone can audit it. No admin keys exist." },
     { q: "What tokens are supported?", a: "ETH and any ERC-20 token (USDC, USDT, DAI, etc.) on Base and Arbitrum networks." },
     { q: "Do I need to create an account?", a: "No. Connect your wallet and create a deal. No email, no sign-up, no KYC." },

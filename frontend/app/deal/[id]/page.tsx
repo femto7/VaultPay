@@ -198,7 +198,7 @@ function DisputeModal({ isOpen, onClose, onSubmit }: {
           </div>
           <div>
             <h2 className="text-base font-bold text-white">Open Dispute</h2>
-            <p className="text-[12px] text-surface-600">An arbiter will review your case</p>
+            <p className="text-[12px] text-surface-600">5 community reviewers will vote on your case</p>
           </div>
         </div>
 
@@ -278,7 +278,7 @@ function DisputeModal({ isOpen, onClose, onSubmit }: {
 
           <div className="bg-red-500/5 border border-red-500/10 rounded-xl p-3">
             <p className="text-[11px] text-red-300/80 leading-relaxed">
-              Disputes are reviewed by an impartial arbiter. Evidence photos are stored permanently on IPFS.
+              Disputes are reviewed by 5 community reviewers who vote within 48h. Evidence photos are stored permanently on IPFS.
             </p>
           </div>
 
