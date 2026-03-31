@@ -293,23 +293,6 @@ export function useClaimRefund() {
   return { claimRefund, isPending, error };
 }
 
-export function useCancelDeal() {
-  const address = useContractAddress();
-  const { writeContractAsync, isPending, error } = useWriteContract();
-
-  async function cancelDeal(dealId: number) {
-    if (!address) throw new Error("Wrong network");
-    return writeContractAsync({
-      address,
-      abi: VAULTPAY_ABI,
-      functionName: "cancelDeal",
-      args: [BigInt(dealId)],
-    });
-  }
-
-  return { cancelDeal, isPending, error };
-}
-
 export function useRegisterAsReviewer() {
   const address = useContractAddress();
   const { writeContractAsync, isPending, error } = useWriteContract();
