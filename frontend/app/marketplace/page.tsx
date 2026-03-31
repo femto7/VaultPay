@@ -4,24 +4,25 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   Search, ShoppingBag, ArrowUpRight, Clock, Wallet, Shield,
-  Sparkles, Lock, Tag, Users, Filter, ChevronDown,
+  Sparkles, Lock, Tag, Palette, Code2, PenTool, Megaphone, Briefcase, Package, Gem,
 } from "lucide-react";
 import { useAllDeals, useCurrentUser, formatAmount, tokenSymbol, ETH_ADDRESS } from "@/lib/useVaultPay";
 import { shortenAddress, timeRemaining } from "@/lib/utils";
 import ImageCarousel from "@/components/ImageCarousel";
+import { ListingSkeleton } from "@/components/Skeleton";
 import type { Deal } from "@/lib/contracts";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 const CATEGORIES = [
   { label: "All", icon: <Sparkles className="w-3.5 h-3.5" />, value: "" },
-  { label: "Design", icon: <Tag className="w-3.5 h-3.5" />, value: "Design" },
-  { label: "Development", icon: <Tag className="w-3.5 h-3.5" />, value: "Development" },
-  { label: "Writing", icon: <Tag className="w-3.5 h-3.5" />, value: "Writing" },
-  { label: "Marketing", icon: <Tag className="w-3.5 h-3.5" />, value: "Marketing" },
-  { label: "Consulting", icon: <Tag className="w-3.5 h-3.5" />, value: "Consulting" },
-  { label: "Physical Goods", icon: <ShoppingBag className="w-3.5 h-3.5" />, value: "Physical Goods" },
-  { label: "NFT / Crypto", icon: <Lock className="w-3.5 h-3.5" />, value: "NFT / Crypto" },
+  { label: "Design", icon: <Palette className="w-3.5 h-3.5" />, value: "Design" },
+  { label: "Development", icon: <Code2 className="w-3.5 h-3.5" />, value: "Development" },
+  { label: "Writing", icon: <PenTool className="w-3.5 h-3.5" />, value: "Writing" },
+  { label: "Marketing", icon: <Megaphone className="w-3.5 h-3.5" />, value: "Marketing" },
+  { label: "Consulting", icon: <Briefcase className="w-3.5 h-3.5" />, value: "Consulting" },
+  { label: "Physical Goods", icon: <Package className="w-3.5 h-3.5" />, value: "Physical Goods" },
+  { label: "NFT / Crypto", icon: <Gem className="w-3.5 h-3.5" />, value: "NFT / Crypto" },
   { label: "Other", icon: <Tag className="w-3.5 h-3.5" />, value: "Other" },
 ];
 
@@ -38,29 +39,31 @@ function parseDescription(raw: string): { text: string; images: string[]; catego
   }
 }
 
-function ListingCard({ deal, currentUser }: { deal: Deal; currentUser?: string }) {
+function ListingCard({ deal, currentUser, index }: { deal: Deal; currentUser?: string; index: number }) {
   const { text, images, category } = parseDescription(deal.description);
   const symbol = tokenSymbol(deal.token);
   const amount = formatAmount(deal.amount, deal.token);
   const isOpen = deal.buyer.toLowerCase() === ZERO_ADDRESS;
   const isMine = currentUser && deal.seller.toLowerCase() === currentUser.toLowerCase();
 
+  // Check if listing is new (< 24h)
+  const isNew = (Date.now() / 1000 - deal.createdAt) < 86400;
+
   return (
     <Link href={`/deal/${deal.id}?from=marketplace`}>
-      <div className="group relative overflow-hidden flex flex-col h-full rounded-2xl bg-surface-100 border border-white/[0.06] hover:border-vault-500/30 transition-all duration-300 hover:shadow-[0_8px_40px_rgba(59,130,246,0.08)] hover:-translate-y-1">
-        {/* Gradient border glow on hover */}
-        <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-          style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.05), transparent 50%)" }} />
+      <div className={`group relative overflow-hidden flex flex-col h-full rounded-2xl bg-surface-100 border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300 hover:shadow-[0_8px_40px_rgba(59,130,246,0.08)] hover:-translate-y-1 gradient-border-hover animate-fade-up ${index < 6 ? `stagger-${index + 1}` : ''}`}>
 
         {/* Image area */}
         <div className="relative overflow-hidden">
           {images.length > 0 ? (
             <ImageCarousel images={images} title={deal.title} />
           ) : (
-            <div className="w-full h-48 bg-gradient-to-br from-surface-200 to-surface-100 flex items-center justify-center">
-              <div className="w-14 h-14 rounded-2xl bg-white/[0.04] flex items-center justify-center">
+            <div className="w-full h-48 bg-gradient-to-br from-surface-200 via-surface-100 to-surface-200 flex items-center justify-center relative">
+              <div className="w-14 h-14 rounded-2xl bg-white/[0.04] flex items-center justify-center border border-white/[0.06]">
                 <ShoppingBag className="w-6 h-6 text-surface-500" />
               </div>
+              {/* Decorative grid pattern */}
+              <div className="absolute inset-0 grid-bg opacity-50" />
             </div>
           )}
 
@@ -72,6 +75,11 @@ function ListingCard({ deal, currentUser }: { deal: Deal; currentUser?: string }
 
           {/* Badges top-left */}
           <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+            {isNew && (
+              <span className="px-2 py-0.5 rounded-md bg-vault-600/30 backdrop-blur-md border border-vault-500/40 text-[10px] font-semibold text-vault-300 animate-pulse-dot">
+                New
+              </span>
+            )}
             {isOpen ? (
               <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 backdrop-blur-md border border-emerald-500/30 text-[10px] font-semibold text-emerald-300">
                 Open
@@ -131,7 +139,7 @@ export default function MarketplacePage() {
   const { deals, isLoading } = useAllDeals();
   const currentUser = useCurrentUser();
 
-  // Show ALL Created deals — both open and reserved
+  // Show ALL Created deals -- both open and reserved
   const listings = useMemo(() => {
     return deals
       .filter((d) => {
@@ -143,15 +151,15 @@ export default function MarketplacePage() {
         }
         return true;
       })
-      .sort((a, b) => b.createdAt - a.createdAt); // Newest first
+      .sort((a, b) => b.createdAt - a.createdAt);
   }, [deals, search, activeCategory]);
 
   const openCount = listings.filter(d => d.buyer.toLowerCase() === ZERO_ADDRESS).length;
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-8 animate-fade-up">
         <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6">
           <div>
             <div className="flex items-center gap-2.5 mb-3">
@@ -162,7 +170,7 @@ export default function MarketplacePage() {
             </div>
             <h1 className="text-2xl font-bold text-white tracking-tight mb-1">Browse Deals</h1>
             <p className="text-[13px] text-surface-600">
-              {listings.length} listing{listings.length !== 1 ? "s" : ""} available{openCount > 0 && ` · ${openCount} open`}
+              {listings.length} listing{listings.length !== 1 ? "s" : ""} available{openCount > 0 && ` \u00B7 ${openCount} open`}
             </p>
           </div>
 
@@ -179,14 +187,14 @@ export default function MarketplacePage() {
             </div>
             <div className="hidden md:flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/15">
               <Shield className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-[11px] font-semibold text-emerald-400">Escrow</span>
+              <span className="text-[11px] font-semibold text-emerald-400">Escrow Protected</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Category pills */}
-      <div className="flex gap-1.5 mb-8 overflow-x-auto pb-1 scrollbar-none">
+      <div className="flex gap-1.5 mb-8 overflow-x-auto pb-1 scrollbar-none animate-fade-up stagger-1">
         {CATEGORIES.map((cat) => (
           <button
             key={cat.value}
@@ -205,12 +213,11 @@ export default function MarketplacePage() {
 
       {/* Grid */}
       {isLoading ? (
-        <div className="text-center py-24">
-          <div className="w-10 h-10 border-2 border-vault-500/40 border-t-vault-400 rounded-full animate-spin mx-auto mb-5" />
-          <p className="text-sm text-surface-600">Loading from contract...</p>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[...Array(8)].map((_, i) => <ListingSkeleton key={i} />)}
         </div>
       ) : listings.length === 0 ? (
-        <div className="text-center py-24 px-8">
+        <div className="text-center py-24 px-8 animate-fade-up">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-surface-200 to-surface-100 border border-white/[0.06] flex items-center justify-center mx-auto mb-6">
             <ShoppingBag className="w-7 h-7 text-surface-500" />
           </div>
@@ -225,8 +232,8 @@ export default function MarketplacePage() {
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {listings.map((deal) => (
-            <ListingCard key={deal.id} deal={deal} currentUser={currentUser ?? undefined} />
+          {listings.map((deal, i) => (
+            <ListingCard key={deal.id} deal={deal} currentUser={currentUser ?? undefined} index={i} />
           ))}
         </div>
       )}

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { X, Loader2, ArrowRight, Info, Lock, ImagePlus, Trash2 } from "lucide-react";
+import { X, Loader2, ArrowRight, Info, Lock, ImagePlus, Trash2, CheckCircle2 } from "lucide-react";
 import { useCreateDeal, ETH_ADDRESS } from "@/lib/useVaultPay";
+import { useToast } from "@/components/Toast";
 
 interface CreateDealModalProps {
   isOpen: boolean;
@@ -43,6 +44,7 @@ export default function CreateDealModal({ isOpen, onClose }: CreateDealModalProp
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { createDeal, isPending } = useCreateDeal();
   const [txError, setTxError] = useState<string | null>(null);
+  const { addToast } = useToast();
 
   const TOKEN_ADDRESSES: Record<string, `0x${string}`> = {
     eth: ETH_ADDRESS,
@@ -121,6 +123,11 @@ export default function CreateDealModal({ isOpen, onClose }: CreateDealModalProp
         deliveryDays: parseInt(form.deliveryDays),
         title: form.title,
         description: descriptionPayload,
+      });
+      addToast({
+        type: "success",
+        title: "Deal created!",
+        message: `"${form.title}" is now live on the marketplace`,
       });
       onClose();
     } catch (err: unknown) {

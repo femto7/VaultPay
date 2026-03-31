@@ -2,30 +2,29 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, Search, Inbox, TrendingUp, Wallet, Scale, Activity, ArrowUpRight, Zap, ShoppingBag } from "lucide-react";
+import { Plus, Search, Inbox, TrendingUp, Wallet, Scale, Activity, ShoppingBag, Zap, DollarSign } from "lucide-react";
 import Link from "next/link";
 import DealCard from "@/components/DealCard";
 import CreateDealModal from "@/components/CreateDealModal";
+import { CardSkeleton, StatSkeleton } from "@/components/Skeleton";
 import { useAllDeals, useCurrentUser, formatAmount, tokenSymbol, ETH_ADDRESS } from "@/lib/useVaultPay";
 import type { DealStatus } from "@/lib/contracts";
 
-function StatCard({ label, value, icon, color, bg, trend }: {
-  label: string; value: number; icon: React.ReactNode; color: string; bg: string; trend?: string;
+function StatCard({ label, value, icon, color, bg, suffix }: {
+  label: string; value: string | number; icon: React.ReactNode; color: string; bg: string; suffix?: string;
 }) {
   return (
-    <div className="rounded-2xl bg-surface-100 border border-white/[0.06] p-5 group hover:border-white/[0.1] transition-all duration-300">
+    <div className="rounded-2xl bg-surface-100 border border-white/[0.06] p-5 group hover:border-white/[0.1] transition-all duration-300 hover:shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
       <div className="flex items-center justify-between mb-3">
-        <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center ${color}`}>
+        <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center ${color} group-hover:scale-110 transition-transform duration-300`}>
           {icon}
         </div>
-        {trend && (
-          <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-            {trend}
-          </span>
-        )}
       </div>
-      <div className="text-2xl font-bold text-white tracking-tight mb-0.5">{value}</div>
-      <div className="text-[11px] text-surface-600 font-medium">{label}</div>
+      <div className="flex items-baseline gap-1">
+        <div className="text-2xl font-bold text-white tracking-tight">{value}</div>
+        {suffix && <span className="text-[11px] text-surface-600 font-medium">{suffix}</span>}
+      </div>
+      <div className="text-[11px] text-surface-600 font-medium mt-0.5">{label}</div>
     </div>
   );
 }
@@ -65,17 +64,26 @@ function DashboardContent() {
     disputed: myDeals.filter((d) => d.status === "Disputed").length,
   };
 
+  // Calculate total volume in ETH
+  const totalVolumeWei = myDeals.reduce((acc, d) => {
+    if (d.token.toLowerCase() === ETH_ADDRESS.toLowerCase() || d.token === "0x0000000000000000000000000000000000000000") {
+      return acc + d.amount;
+    }
+    return acc;
+  }, BigInt(0));
+  const totalVolume = (Number(totalVolumeWei) / 1e18).toFixed(3);
+
   const FILTERS = [
-    { key: "all" as const, label: "All" },
-    { key: "active" as const, label: "Active" },
-    { key: "completed" as const, label: "Done" },
-    { key: "disputed" as const, label: "Disputed" },
+    { key: "all" as const, label: "All", count: myDeals.length },
+    { key: "active" as const, label: "Active", count: stats.active },
+    { key: "completed" as const, label: "Done", count: stats.completed },
+    { key: "disputed" as const, label: "Disputed", count: stats.disputed },
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
       {/* Welcome + Quick actions */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 animate-fade-up">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight mb-1">My Deals</h1>
           <p className="text-[13px] text-surface-600">
@@ -95,15 +103,29 @@ function DashboardContent() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-        <StatCard label="Active Deals" value={stats.active} icon={<Zap className="w-4 h-4" />} color="text-blue-400" bg="bg-blue-500/[0.08]" />
-        <StatCard label="Completed" value={stats.completed} icon={<TrendingUp className="w-4 h-4" />} color="text-emerald-400" bg="bg-emerald-500/[0.08]" />
-        <StatCard label="Disputes" value={stats.disputed} icon={<Scale className="w-4 h-4" />} color="text-red-400" bg="bg-red-500/[0.08]" />
-        <StatCard label="Total" value={myDeals.length} icon={<Activity className="w-4 h-4" />} color="text-vault-400" bg="bg-vault-500/[0.08]" />
-      </div>
+      {isLoading ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+          {[...Array(4)].map((_, i) => <StatSkeleton key={i} />)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+          <div className="animate-fade-up stagger-1">
+            <StatCard label="Active Deals" value={stats.active} icon={<Zap className="w-4 h-4" />} color="text-blue-400" bg="bg-blue-500/[0.08]" />
+          </div>
+          <div className="animate-fade-up stagger-2">
+            <StatCard label="Completed" value={stats.completed} icon={<TrendingUp className="w-4 h-4" />} color="text-emerald-400" bg="bg-emerald-500/[0.08]" />
+          </div>
+          <div className="animate-fade-up stagger-3">
+            <StatCard label="Disputes" value={stats.disputed} icon={<Scale className="w-4 h-4" />} color="text-red-400" bg="bg-red-500/[0.08]" />
+          </div>
+          <div className="animate-fade-up stagger-4">
+            <StatCard label="Total Volume" value={totalVolume} icon={<DollarSign className="w-4 h-4" />} color="text-vault-400" bg="bg-vault-500/[0.08]" suffix="ETH" />
+          </div>
+        </div>
+      )}
 
       {/* Filters + Search */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6 animate-fade-up stagger-3">
         <div className="flex items-center gap-1 rounded-xl bg-surface-100 border border-white/[0.06] p-1">
           {FILTERS.map((f) => (
             <button
@@ -116,8 +138,10 @@ function DashboardContent() {
               }`}
             >
               {f.label}
-              {f.key === "active" && stats.active > 0 && (
-                <span className="ml-1 text-[10px] opacity-70">{stats.active}</span>
+              {f.count > 0 && (
+                <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full ${
+                  filter === f.key ? "bg-white/20" : "bg-white/[0.06]"
+                }`}>{f.count}</span>
               )}
             </button>
           ))}
@@ -137,12 +161,11 @@ function DashboardContent() {
 
       {/* Deals Grid */}
       {isLoading ? (
-        <div className="text-center py-20">
-          <div className="w-10 h-10 border-2 border-vault-500/40 border-t-vault-400 rounded-full animate-spin mx-auto mb-5" />
-          <p className="text-[13px] text-surface-600">Loading from contract...</p>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => <CardSkeleton key={i} />)}
         </div>
       ) : !currentUser ? (
-        <div className="text-center py-20 px-8">
+        <div className="text-center py-20 px-8 animate-fade-up">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-surface-200 to-surface-100 border border-white/[0.06] flex items-center justify-center mx-auto mb-6">
             <Wallet className="w-7 h-7 text-surface-500" />
           </div>
@@ -152,7 +175,7 @@ function DashboardContent() {
           </p>
         </div>
       ) : filteredDeals.length === 0 ? (
-        <div className="text-center py-20 px-8">
+        <div className="text-center py-20 px-8 animate-fade-up">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-surface-200 to-surface-100 border border-white/[0.06] flex items-center justify-center mx-auto mb-6">
             <Inbox className="w-7 h-7 text-surface-500" />
           </div>
@@ -171,19 +194,20 @@ function DashboardContent() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredDeals.map((deal) => (
-            <DealCard
-              key={deal.id}
-              id={deal.id}
-              title={deal.title}
-              amount={formatAmount(deal.amount, deal.token)}
-              token={tokenSymbol(deal.token)}
-              status={deal.status}
-              buyer={deal.buyer}
-              seller={deal.seller}
-              deadline={deal.deliveryDeadline}
-              currentUser={currentUser ?? undefined}
-            />
+          {filteredDeals.map((deal, i) => (
+            <div key={deal.id} className={`animate-fade-up ${i < 6 ? `stagger-${i + 1}` : ''}`}>
+              <DealCard
+                id={deal.id}
+                title={deal.title}
+                amount={formatAmount(deal.amount, deal.token)}
+                token={tokenSymbol(deal.token)}
+                status={deal.status}
+                buyer={deal.buyer}
+                seller={deal.seller}
+                deadline={deal.deliveryDeadline}
+                currentUser={currentUser ?? undefined}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -195,7 +219,16 @@ function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div className="text-center py-20"><div className="w-10 h-10 border-2 border-vault-500/40 border-t-vault-400 rounded-full animate-spin mx-auto" /></div>}>
+    <Suspense fallback={
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+          {[...Array(4)].map((_, i) => <StatSkeleton key={i} />)}
+        </div>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => <CardSkeleton key={i} />)}
+        </div>
+      </div>
+    }>
       <DashboardContent />
     </Suspense>
   );

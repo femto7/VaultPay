@@ -21,6 +21,7 @@ import {
   User,
   ImagePlus,
   Trash2,
+  Check,
 } from "lucide-react";
 import { DEAL_STATUS, STATUS_COLORS, type DealStatus } from "@/lib/contracts";
 import { shortenAddress, formatDate, timeRemaining } from "@/lib/utils";
@@ -37,6 +38,8 @@ import {
   tokenSymbol,
   ETH_ADDRESS,
 } from "@/lib/useVaultPay";
+import { useToast } from "@/components/Toast";
+import { DealDetailSkeleton } from "@/components/Skeleton";
 
 const BASESCAN_URL = "https://sepolia.basescan.org/address/0xd36B0A56ccDED60a4Fb21201bB391521a34556A4";
 
@@ -74,6 +77,7 @@ function Timeline({ status }: { status: DealStatus }) {
   const currentIndex = statusOrder.indexOf(status);
   const isDisputed = ["Disputed", "Resolved"].includes(status);
   const isRefunded = status === "Refunded";
+  const isCancelled = status === "Cancelled";
 
   return (
     <div className="flex items-center gap-1 w-full">
@@ -85,19 +89,19 @@ function Timeline({ status }: { status: DealStatus }) {
         return (
           <div key={step.label} className="flex items-center flex-1">
             <div className="flex flex-col items-center">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors ${
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold transition-all duration-500 ${
                 isCompleted || isCurrent
-                  ? "bg-vault-600 text-white"
+                  ? "bg-vault-600 text-white shadow-[0_0_12px_rgba(59,130,246,0.25)]"
                   : "bg-surface-300 text-surface-600"
               }`}>
-                {isCompleted ? <CheckCircle2 className="w-3.5 h-3.5" /> : i + 1}
+                {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
               </div>
-              <span className={`text-[10px] mt-1.5 font-medium ${isCurrent ? "text-vault-400" : "text-surface-600"}`}>
+              <span className={`text-[10px] mt-1.5 font-medium transition-colors ${isCurrent ? "text-vault-400" : isCompleted ? "text-surface-700" : "text-surface-600"}`}>
                 {step.label}
               </span>
             </div>
             {i < steps.length - 1 && (
-              <div className={`flex-1 h-[2px] mx-1.5 rounded-full ${stepIndex < currentIndex ? "bg-vault-600" : "bg-surface-300"}`} />
+              <div className={`flex-1 h-[2px] mx-1.5 rounded-full transition-all duration-700 ${stepIndex < currentIndex ? "bg-vault-600" : "bg-surface-300"}`} />
             )}
           </div>
         );
@@ -107,7 +111,7 @@ function Timeline({ status }: { status: DealStatus }) {
         <div className="flex items-center">
           <div className="w-px h-5 bg-red-500/40 mx-2" />
           <div className="status-badge bg-red-500/10 text-red-400 text-[10px]">
-            <AlertTriangle className="w-3 h-3" />
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
             {status}
           </div>
         </div>
@@ -118,6 +122,15 @@ function Timeline({ status }: { status: DealStatus }) {
           <div className="status-badge bg-orange-500/10 text-orange-400 text-[10px]">
             <RefreshCw className="w-3 h-3" />
             Refunded
+          </div>
+        </div>
+      )}
+      {isCancelled && (
+        <div className="flex items-center">
+          <div className="w-px h-5 bg-surface-500/40 mx-2" />
+          <div className="status-badge bg-surface-500/10 text-surface-600 text-[10px]">
+            <Ban className="w-3 h-3" />
+            Cancelled
           </div>
         </div>
       )}
@@ -191,7 +204,7 @@ function DisputeModal({ isOpen, onClose, onSubmit }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-surface-100 border border-white/[0.08] rounded-2xl max-h-[90vh] overflow-y-auto p-6">
+      <div className="relative w-full max-w-lg bg-surface-100 border border-white/[0.08] rounded-2xl max-h-[90vh] overflow-y-auto p-6 animate-fade-up">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center">
             <AlertTriangle className="w-4 h-4 text-red-400" />
@@ -305,6 +318,8 @@ export default function DealPage({ params }: { params: { id: string } }) {
   const fromMarketplace = searchParams.get("from") === "marketplace";
   const [showDispute, setShowDispute] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const { addToast } = useToast();
 
   const { deal, isLoading } = useDeal(dealId);
   const currentUser = useCurrentUser();
@@ -325,32 +340,56 @@ export default function DealPage({ params }: { params: { id: string } }) {
 
   function copyLink() {
     navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
-  async function handleAction(fn: () => Promise<unknown>) {
+  async function handleAction(fn: () => Promise<unknown>, actionName: string) {
     setTxError(null);
+    const toastId = addToast({
+      type: "pending",
+      title: `${actionName}...`,
+      message: "Please confirm in your wallet",
+    });
     try {
-      await fn();
+      const result = await fn();
+      const txHash = typeof result === "string" ? result : undefined;
+      addToast({
+        type: "success",
+        title: `${actionName} confirmed`,
+        message: "Transaction submitted successfully",
+        txHash,
+      });
+      // Remove pending toast
+      setTimeout(() => {
+        const el = document.querySelector(`[data-toast-id="${toastId}"]`);
+        if (el) el.remove();
+      }, 0);
     } catch (err: unknown) {
-      setTxError(err instanceof Error ? err.message.slice(0, 120) : "Transaction failed");
+      const msg = err instanceof Error ? err.message.slice(0, 120) : "Transaction failed";
+      setTxError(msg);
+      addToast({
+        type: "error",
+        title: `${actionName} failed`,
+        message: msg.length > 80 ? msg.slice(0, 80) + "..." : msg,
+      });
     }
   }
 
   if (isLoading) {
-    return (
-      <div className="max-w-4xl mx-auto px-6 py-20 text-center">
-        <div className="w-8 h-8 border-2 border-vault-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-sm text-surface-600">Loading deal from contract...</p>
-      </div>
-    );
+    return <DealDetailSkeleton />;
   }
 
   if (!deal) {
     return (
-      <div className="max-w-4xl mx-auto px-6 py-20 text-center">
-        <p className="text-surface-600">Deal #{dealId} not found.</p>
-        <Link href="/dashboard" className="btn-secondary mt-4 inline-flex">
-          <ArrowLeft className="w-4 h-4" /> Back
+      <div className="max-w-4xl mx-auto px-6 py-20 text-center animate-fade-up">
+        <div className="w-16 h-16 rounded-2xl bg-surface-200 border border-white/[0.06] flex items-center justify-center mx-auto mb-6">
+          <AlertTriangle className="w-7 h-7 text-surface-500" />
+        </div>
+        <h3 className="text-base font-semibold text-white mb-2">Deal not found</h3>
+        <p className="text-surface-600 mb-6">Deal #{dealId} doesn&apos;t exist or hasn&apos;t been created yet.</p>
+        <Link href="/dashboard" className="btn-secondary inline-flex">
+          <ArrowLeft className="w-4 h-4" /> Back to Dashboard
         </Link>
       </div>
     );
@@ -362,18 +401,23 @@ export default function DealPage({ params }: { params: { id: string } }) {
   const totalWei = deal.amount + deal.fee;
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
-      <Link href={fromMarketplace ? "/marketplace" : "/dashboard"} className="inline-flex items-center gap-1.5 text-[13px] text-surface-600 hover:text-white transition-colors mb-6 font-medium">
-        <ArrowLeft className="w-3.5 h-3.5" />
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      <Link href={fromMarketplace ? "/marketplace" : "/dashboard"} className="inline-flex items-center gap-1.5 text-[13px] text-surface-600 hover:text-white transition-colors mb-6 font-medium group">
+        <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
         {fromMarketplace ? "Back to Marketplace" : "Back to deals"}
       </Link>
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row items-start justify-between gap-4 mb-8">
+      <div className="flex flex-col md:flex-row items-start justify-between gap-4 mb-8 animate-fade-up">
         <div>
           <div className="flex items-center gap-3 mb-1.5">
             <h1 className="text-xl font-bold text-white tracking-tight">{deal.title}</h1>
             <div className={`status-badge ${STATUS_BADGE_STYLES[deal.status]}`}>
+              {["Created", "Funded", "Delivered", "Disputed"].includes(deal.status) && (
+                <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                  deal.status === "Disputed" ? "bg-red-400" : "bg-current"
+                }`} />
+              )}
               {STATUS_ICON_MAP[deal.status]}
               {deal.status}
             </div>
@@ -385,8 +429,8 @@ export default function DealPage({ params }: { params: { id: string } }) {
 
         <div className="flex items-center gap-2">
           <button onClick={copyLink} className="btn-secondary btn-sm">
-            <Copy className="w-3.5 h-3.5" />
-            Copy Link
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? "Copied!" : "Copy Link"}
           </button>
           <a href={BASESCAN_URL} target="_blank" rel="noopener noreferrer" className="btn-secondary btn-sm">
             <ExternalLink className="w-3.5 h-3.5" />
@@ -396,7 +440,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Timeline */}
-      <div className="card mb-6">
+      <div className="card mb-6 animate-fade-up stagger-1">
         <h3 className="text-[12px] font-medium text-surface-600 uppercase tracking-wider mb-4">Progress</h3>
         <Timeline status={deal.status} />
       </div>
@@ -405,7 +449,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
         {/* Main */}
         <div className="md:col-span-2 space-y-5">
           {/* Escrow Details */}
-          <div className="card">
+          <div className="card animate-fade-up stagger-2">
             <h3 className="text-[12px] font-medium text-surface-600 uppercase tracking-wider mb-4">Escrow Details</h3>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -421,10 +465,15 @@ export default function DealPage({ params }: { params: { id: string } }) {
                 {deal.deliveryDeadline > 0 ? (
                   <>
                     <p className="text-sm text-white font-medium">{formatDate(deal.deliveryDeadline)}</p>
-                    <p className="text-[11px] text-vault-400 mt-0.5">{timeRemaining(deal.deliveryDeadline)}</p>
+                    <p className={`text-[11px] mt-0.5 ${
+                      timeRemaining(deal.deliveryDeadline) === "Expired" ? "text-red-400" : "text-vault-400"
+                    }`}>{timeRemaining(deal.deliveryDeadline)}</p>
                   </>
                 ) : (
-                  <p className="text-sm text-surface-600">Starts on funding</p>
+                  <p className="text-sm text-surface-600 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />
+                    Starts on funding
+                  </p>
                 )}
               </div>
               <div>
@@ -432,17 +481,19 @@ export default function DealPage({ params }: { params: { id: string } }) {
                 {deal.disputeDeadline > 0 ? (
                   <>
                     <p className="text-sm text-white font-medium">{formatDate(deal.disputeDeadline)}</p>
-                    <p className="text-[11px] text-amber-400 mt-0.5">{timeRemaining(deal.disputeDeadline)}</p>
+                    <p className={`text-[11px] mt-0.5 ${
+                      timeRemaining(deal.disputeDeadline) === "Expired" ? "text-red-400" : "text-amber-400"
+                    }`}>{timeRemaining(deal.disputeDeadline)}</p>
                   </>
                 ) : (
-                  <p className="text-sm text-surface-600">—</p>
+                  <p className="text-sm text-surface-600">&mdash;</p>
                 )}
               </div>
             </div>
           </div>
 
           {/* Description + Images */}
-          <div className="card">
+          <div className="card animate-fade-up stagger-3">
             <h3 className="text-[12px] font-medium text-surface-600 uppercase tracking-wider mb-3 flex items-center gap-2">
               <FileText className="w-3.5 h-3.5" />
               Description
@@ -462,7 +513,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
                     <div className={`grid gap-2 mt-4 ${imgs.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
                       {imgs.map((url, i) => (
                         <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                          <img src={url} alt={`Photo ${i + 1}`} className="w-full rounded-xl object-cover max-h-60 hover:opacity-90 transition-opacity cursor-zoom-in" />
+                          <img src={url} alt={`Photo ${i + 1}`} className="w-full rounded-xl object-cover max-h-60 hover:opacity-90 transition-opacity cursor-zoom-in border border-white/[0.06]" />
                         </a>
                       ))}
                     </div>
@@ -473,11 +524,11 @@ export default function DealPage({ params }: { params: { id: string } }) {
           </div>
 
           {/* Actions */}
-          <div className="card space-y-3">
+          <div className="card space-y-3 animate-fade-up stagger-4">
             <h3 className="text-[12px] font-medium text-surface-600 uppercase tracking-wider mb-1">Actions</h3>
 
             {txError && (
-              <div className="text-[12px] text-red-400 bg-red-500/8 border border-red-500/15 rounded-xl px-4 py-2.5">
+              <div className="text-[12px] text-red-400 bg-red-500/8 border border-red-500/15 rounded-xl px-4 py-2.5 animate-slide-up">
                 {txError}
               </div>
             )}
@@ -485,7 +536,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
             {/* BUYER or anyone (open listing): fund */}
             {deal.status === "Created" && (isBuyer || isOpenListing) && !isSeller && currentUser && (
               <button
-                onClick={() => handleAction(() => fundDeal(dealId, totalWei))}
+                onClick={() => handleAction(() => fundDeal(dealId, totalWei), "Fund Escrow")}
                 disabled={isActionPending}
                 className="btn-primary w-full !py-3"
               >
@@ -497,7 +548,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
             {/* SELLER: cancel unfunded deal */}
             {deal.status === "Created" && isSeller && (
               <button
-                onClick={() => handleAction(() => cancelDeal(dealId))}
+                onClick={() => handleAction(() => cancelDeal(dealId), "Cancel Deal")}
                 disabled={isActionPending}
                 className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 border border-white/[0.08] text-surface-700 hover:text-white hover:border-white/[0.14] font-medium text-sm rounded-xl transition-all"
               >
@@ -509,7 +560,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
             {/* SELLER: confirm delivery */}
             {deal.status === "Funded" && isSeller && (
               <button
-                onClick={() => handleAction(() => confirmDelivery(dealId))}
+                onClick={() => handleAction(() => confirmDelivery(dealId), "Confirm Delivery")}
                 disabled={isActionPending}
                 className="btn-primary w-full !py-3"
               >
@@ -521,9 +572,12 @@ export default function DealPage({ params }: { params: { id: string } }) {
             {/* BUYER: waiting for seller */}
             {deal.status === "Funded" && (isBuyer || (!isSeller && !isOpenListing)) && (
               <div className="space-y-3">
-                <p className="text-[13px] text-surface-600">
-                  Waiting for seller to deliver. You can open a dispute or claim a refund after the deadline.
-                </p>
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-blue-500/[0.04] border border-blue-500/10">
+                  <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                  <p className="text-[13px] text-blue-300/80">
+                    Waiting for seller to deliver. You can open a dispute or claim a refund after the deadline.
+                  </p>
+                </div>
                 <button
                   onClick={() => setShowDispute(true)}
                   disabled={isActionPending}
@@ -533,7 +587,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
                   Open Dispute
                 </button>
                 <button
-                  onClick={() => handleAction(() => claimRefund(dealId))}
+                  onClick={() => handleAction(() => claimRefund(dealId), "Claim Refund")}
                   disabled={isActionPending}
                   className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 border border-white/[0.08] text-surface-700 hover:text-white hover:border-white/[0.14] font-medium text-sm rounded-xl transition-all"
                 >
@@ -547,7 +601,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
             {deal.status === "Delivered" && (isBuyer || (!isSeller && currentUser)) && (
               <div className="space-y-3">
                 <button
-                  onClick={() => handleAction(() => releaseFunds(dealId))}
+                  onClick={() => handleAction(() => releaseFunds(dealId), "Release Funds")}
                   disabled={isActionPending}
                   className="btn-primary w-full !py-3"
                 >
@@ -567,33 +621,44 @@ export default function DealPage({ params }: { params: { id: string } }) {
 
             {/* SELLER: waiting for buyer to release */}
             {deal.status === "Delivered" && isSeller && (
-              <p className="text-[13px] text-surface-600 py-2">
-                Delivery confirmed. Waiting for buyer to release funds or open a dispute.
-              </p>
+              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-amber-500/[0.04] border border-amber-500/10">
+                <Clock className="w-4 h-4 text-amber-400" />
+                <p className="text-[13px] text-amber-300/80">
+                  Delivery confirmed. Waiting for buyer to release funds or open a dispute.
+                </p>
+              </div>
             )}
 
             {/* Finalized */}
             {["Released", "Resolved", "Refunded", "Cancelled"].includes(deal.status) && (
-              <div className="text-center py-4">
-                <CheckCircle2 className="w-7 h-7 text-emerald-400 mx-auto mb-2" />
-                <p className="text-sm text-surface-700">This deal has been {deal.status.toLowerCase()}.</p>
+              <div className="text-center py-6 rounded-xl bg-emerald-500/[0.03] border border-emerald-500/10">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-3">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                </div>
+                <p className="text-sm font-medium text-white mb-0.5">Deal {deal.status.toLowerCase()}</p>
+                <p className="text-[12px] text-surface-600">This deal has been finalized.</p>
               </div>
             )}
 
             {/* Not a party */}
             {!isBuyer && !isSeller && currentUser && !isOpenListing && (
-              <p className="text-[13px] text-surface-600 text-center py-2">You are not a party to this deal.</p>
+              <div className="text-center py-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                <p className="text-[13px] text-surface-600">You are not a party to this deal.</p>
+              </div>
             )}
 
             {!currentUser && (
-              <p className="text-[13px] text-surface-600 text-center py-2">Connect your wallet to interact with this deal.</p>
+              <div className="text-center py-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                <Wallet className="w-5 h-5 text-surface-500 mx-auto mb-2" />
+                <p className="text-[13px] text-surface-600">Connect your wallet to interact with this deal.</p>
+              </div>
             )}
           </div>
         </div>
 
         {/* Sidebar */}
         <div className="space-y-5">
-          <div className="card">
+          <div className="card animate-fade-up stagger-2">
             <h3 className="text-[12px] font-medium text-surface-600 uppercase tracking-wider mb-4">Parties</h3>
             <div className="space-y-4">
               <div>
@@ -602,7 +667,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
                     <User className="w-2.5 h-2.5 text-vault-400" />
                   </div>
                   <span className="text-[11px] text-surface-600 uppercase tracking-wider font-medium">
-                    Buyer {isBuyer && "(You)"}
+                    Buyer {isBuyer && <span className="text-vault-400">(You)</span>}
                   </span>
                 </div>
                 {isOpenListing ? (
@@ -621,7 +686,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
                     <User className="w-2.5 h-2.5 text-violet-400" />
                   </div>
                   <span className="text-[11px] text-surface-600 uppercase tracking-wider font-medium">
-                    Seller {isSeller && "(You)"}
+                    Seller {isSeller && <span className="text-violet-400">(You)</span>}
                   </span>
                 </div>
                 <a href={`https://sepolia.basescan.org/address/${deal.seller}`} target="_blank" rel="noopener noreferrer"
@@ -632,7 +697,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
             </div>
           </div>
 
-          <div className="card">
+          <div className="card animate-fade-up stagger-3">
             <h3 className="text-[12px] font-medium text-surface-600 uppercase tracking-wider mb-4 flex items-center gap-2">
               <Shield className="w-3.5 h-3.5" />
               Security
@@ -653,20 +718,23 @@ export default function DealPage({ params }: { params: { id: string } }) {
             </ul>
           </div>
 
-          <div className="card">
+          <div className="card animate-fade-up stagger-4">
             <h3 className="text-[12px] font-medium text-surface-600 uppercase tracking-wider mb-4">Activity</h3>
-            <div className="space-y-3">
+            <div className="space-y-3 relative">
+              {/* Timeline line */}
+              <div className="absolute left-[3px] top-2 bottom-2 w-px bg-gradient-to-b from-vault-500/20 via-surface-400/20 to-transparent" />
+
               {deal.fundedAt > 0 && (
-                <div className="flex items-start gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
+                <div className="flex items-start gap-3 relative">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0 ring-2 ring-surface-100" />
                   <div>
                     <p className="text-[12px] text-surface-800">Buyer funded the escrow</p>
                     <p className="text-[10px] text-surface-600 mt-0.5">{formatDate(deal.fundedAt)}</p>
                   </div>
                 </div>
               )}
-              <div className="flex items-start gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-surface-500 mt-1.5 flex-shrink-0" />
+              <div className="flex items-start gap-3 relative">
+                <div className="w-1.5 h-1.5 rounded-full bg-surface-500 mt-1.5 flex-shrink-0 ring-2 ring-surface-100" />
                 <div>
                   <p className="text-[12px] text-surface-800">Deal created</p>
                   <p className="text-[10px] text-surface-600 mt-0.5">{formatDate(deal.createdAt)}</p>
@@ -680,7 +748,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
       <DisputeModal
         isOpen={showDispute}
         onClose={() => setShowDispute(false)}
-        onSubmit={(reason, evidence) => handleAction(() => openDispute(dealId, reason, evidence))}
+        onSubmit={(reason, evidence) => handleAction(() => openDispute(dealId, reason, evidence), "Open Dispute")}
       />
     </div>
   );
