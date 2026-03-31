@@ -820,7 +820,7 @@ contract VaultPayEscrowTest is Test {
         vm.prank(seller);
         uint256 dealId = escrow.createDeal(buyer, address(0), DEAL_AMOUNT, 7, "Test", "Test");
 
-        vm.prank(buyer);
+        vm.prank(seller);
         escrow.cancelDeal(dealId);
 
         assertEq(uint8(escrow.getDeal(dealId).status), uint8(VaultPayEscrow.DealStatus.Cancelled));
@@ -828,17 +828,17 @@ contract VaultPayEscrowTest is Test {
 
     function test_RevertCancel_AlreadyFunded() public {
         uint256 dealId = _createAndFundETHDeal();
-        vm.prank(buyer);
+        vm.prank(seller);
         vm.expectRevert("Can only cancel unfunded deals");
         escrow.cancelDeal(dealId);
     }
 
-    function test_RevertCancel_NotBuyer() public {
+    function test_RevertCancel_NotSeller() public {
         vm.prank(seller);
         uint256 dealId = escrow.createDeal(buyer, address(0), DEAL_AMOUNT, 7, "Test", "");
 
         vm.prank(attacker);
-        vm.expectRevert("Not buyer");
+        vm.expectRevert("Not seller");
         escrow.cancelDeal(dealId);
     }
 

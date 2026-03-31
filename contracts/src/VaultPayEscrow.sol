@@ -466,8 +466,8 @@ contract VaultPayEscrow is ReentrancyGuard {
         emit DealRefunded(dealId, totalRefund);
     }
 
-    /// @notice Cancel an unfunded deal
-    function cancelDeal(uint256 dealId) external onlyBuyer(dealId) {
+    /// @notice Cancel an unfunded deal — only seller can cancel before funding
+    function cancelDeal(uint256 dealId) external onlySeller(dealId) {
         Deal storage deal = deals[dealId];
         require(deal.status == DealStatus.Created, "Can only cancel unfunded deals");
 

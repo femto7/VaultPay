@@ -482,8 +482,8 @@ export default function DealPage({ params }: { params: { id: string } }) {
               </button>
             )}
 
-            {/* BUYER: cancel unfunded */}
-            {deal.status === "Created" && isBuyer && (
+            {/* SELLER: cancel unfunded deal */}
+            {deal.status === "Created" && isSeller && (
               <button
                 onClick={() => handleAction(() => cancelDeal(dealId))}
                 disabled={isActionPending}
