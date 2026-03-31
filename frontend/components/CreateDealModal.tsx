@@ -27,11 +27,14 @@ async function uploadToIPFS(file: File): Promise<string> {
 }
 
 export default function CreateDealModal({ isOpen, onClose }: CreateDealModalProps) {
+  const CATEGORIES = ["Design", "Development", "Writing", "Marketing", "Consulting", "Physical Goods", "NFT / Crypto", "Other"];
+
   const [form, setForm] = useState({
     buyer: "",
     amount: "",
     token: "eth",
     deliveryDays: "7",
+    category: "",
     title: "",
     description: "",
   });
@@ -104,9 +107,11 @@ export default function CreateDealModal({ isOpen, onClose }: CreateDealModalProp
     }
 
     const imageUrls = images.filter((img) => img.url).map((img) => img.url as string);
-    const descriptionPayload = imageUrls.length > 0
-      ? JSON.stringify({ text: form.description, images: imageUrls })
-      : form.description;
+    const descriptionPayload = JSON.stringify({
+      text: form.description,
+      images: imageUrls,
+      ...(form.category ? { category: form.category } : {}),
+    });
 
     try {
       await createDeal({
@@ -162,6 +167,26 @@ export default function CreateDealModal({ isOpen, onClose }: CreateDealModalProp
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                 required
               />
+            </div>
+
+            <div>
+              <label className="block text-[12px] font-medium text-surface-700 mb-1.5">Category</label>
+              <div className="flex flex-wrap gap-1.5">
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setForm({ ...form, category: form.category === cat ? "" : cat })}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${
+                      form.category === cat
+                        ? "bg-vault-600/20 border-vault-500/40 text-vault-300"
+                        : "bg-white/[0.03] border-white/[0.06] text-surface-600 hover:text-white hover:border-white/[0.1]"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div>

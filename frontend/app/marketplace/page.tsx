@@ -10,20 +10,23 @@ import type { Deal } from "@/lib/contracts";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-function parseDescription(raw: string): { text: string; images: string[] } {
+const CATEGORIES = ["Design", "Development", "Writing", "Marketing", "Consulting", "Physical Goods", "NFT / Crypto", "Other"];
+
+function parseDescription(raw: string): { text: string; images: string[]; category: string } {
   try {
     const parsed = JSON.parse(raw);
     return {
       text: parsed.text ?? raw,
       images: Array.isArray(parsed.images) ? parsed.images : [],
+      category: parsed.category ?? "",
     };
   } catch {
-    return { text: raw, images: [] };
+    return { text: raw, images: [], category: "" };
   }
 }
 
 function ListingCard({ deal }: { deal: Deal }) {
-  const { text, images } = parseDescription(deal.description);
+  const { text, images, category } = parseDescription(deal.description);
   const symbol = tokenSymbol(deal.token);
   const amount = formatAmount(deal.amount, deal.token);
 
@@ -49,6 +52,11 @@ function ListingCard({ deal }: { deal: Deal }) {
         {/* Content */}
         <div className="flex flex-col flex-1 p-5 gap-3">
           <div>
+            {category && (
+              <span className="inline-block px-2 py-0.5 rounded-md bg-vault-600/10 border border-vault-500/20 text-[10px] font-medium text-vault-400 mb-1.5">
+                {category}
+              </span>
+            )}
             <h3 className="text-sm font-semibold text-white group-hover:text-vault-400 transition-colors line-clamp-1">
               {deal.title}
             </h3>
@@ -87,14 +95,18 @@ function ListingCard({ deal }: { deal: Deal }) {
 
 export default function MarketplacePage() {
   const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState("");
   const { deals, isLoading } = useAllDeals();
 
-  const listings = deals.filter(
-    (d) =>
-      d.buyer.toLowerCase() === ZERO_ADDRESS &&
-      d.status === "Created" &&
-      (search === "" || d.title.toLowerCase().includes(search.toLowerCase()))
-  );
+  const listings = deals.filter((d) => {
+    if (d.buyer.toLowerCase() !== ZERO_ADDRESS || d.status !== "Created") return false;
+    if (search && !d.title.toLowerCase().includes(search.toLowerCase())) return false;
+    if (activeCategory) {
+      const { category } = parseDescription(d.description);
+      if (category !== activeCategory) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
@@ -129,6 +141,33 @@ export default function MarketplacePage() {
             <span className="text-[11px] font-medium text-emerald-400">Escrow protected</span>
           </div>
         </div>
+      </div>
+
+      {/* Category filters */}
+      <div className="flex flex-wrap gap-2 mb-8">
+        <button
+          onClick={() => setActiveCategory("")}
+          className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${
+            activeCategory === ""
+              ? "bg-vault-600/20 border-vault-500/40 text-vault-300"
+              : "bg-white/[0.03] border-white/[0.06] text-surface-600 hover:text-white hover:border-white/[0.1]"
+          }`}
+        >
+          All
+        </button>
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setActiveCategory(activeCategory === cat ? "" : cat)}
+            className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${
+              activeCategory === cat
+                ? "bg-vault-600/20 border-vault-500/40 text-vault-300"
+                : "bg-white/[0.03] border-white/[0.06] text-surface-600 hover:text-white hover:border-white/[0.1]"
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
       </div>
 
       {/* Grid */}
