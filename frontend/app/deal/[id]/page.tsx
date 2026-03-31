@@ -38,7 +38,7 @@ import {
   ETH_ADDRESS,
 } from "@/lib/useVaultPay";
 
-const BASESCAN_URL = "https://sepolia.basescan.org/address/0xf6c46bb2a65069F1f8C0b79168C879A4170d8BAf";
+const BASESCAN_URL = "https://sepolia.basescan.org/address/0x6b29e0CFBA470c23355191010B938d1d058aa69f";
 
 const STATUS_ICON_MAP: Record<DealStatus, React.ReactNode> = {
   Created: <Clock className="w-4 h-4" />,
