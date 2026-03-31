@@ -183,7 +183,7 @@ export function useCreateDeal() {
       ? parseEther(params.amount)
       : parseUnits(params.amount, 6);
 
-    const args = [params.buyer, params.token, amountWei, BigInt(params.deliveryDays) * BigInt(86400), params.title, params.description] as const;
+    const args = [params.buyer, params.token, amountWei, BigInt(params.deliveryDays), params.title, params.description] as const;
 
     if (publicClient && userAddress) {
       await publicClient.simulateContract({
