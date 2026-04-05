@@ -1145,4 +1145,167 @@ contract VaultPayEscrowTest is Test {
         emit VaultPayEscrow.DealRefunded(dealId, DEAL_AMOUNT + fee);
         escrow.claimRefund(dealId);
     }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  14. REVIEWER DISPUTE CYCLE — AUTO-EJECT AFTER 10 SELECTIONS
+    // ═════════════════════════════════════════════════════════════════════════
+
+    /// @dev Open a dispute, have all 5 reviewers vote, finalize. Returns the panel.
+    function _runFullDispute(address _buyer, address _seller, uint8 vote)
+        internal returns (address[5] memory panel)
+    {
+        uint256 fee = (DEAL_AMOUNT * FEE_BPS) / 10000;
+        vm.prank(_seller);
+        uint256 dealId = escrow.createDeal(_buyer, address(0), DEAL_AMOUNT, 7, "D", "");
+        vm.prank(_buyer);
+        escrow.fundDeal{value: DEAL_AMOUNT + fee}(dealId);
+
+        vm.prank(_buyer);
+        escrow.openDispute(dealId, "issue", "");
+
+        (panel,,,,) = escrow.getDisputeVoting(dealId);
+        for (uint256 i = 0; i < 5; i++) {
+            vm.prank(panel[i]);
+            escrow.submitVote(dealId, vote);
+        }
+        vm.warp(block.timestamp + 48 hours + 1);
+        escrow.finalizeDispute(dealId);
+    }
+
+    function test_ReviewerDisputeCount_IncrementsOnSelection() public {
+        _registerReviewers();
+        uint256 dealId = _createAndFundETHDeal();
+        vm.prank(buyer);
+        escrow.openDispute(dealId, "issue", "");
+
+        (address[5] memory panel,,,,) = escrow.getDisputeVoting(dealId);
+        for (uint256 i = 0; i < 5; i++) {
+            assertEq(escrow.reviewerDisputeCount(panel[i]), 1);
+        }
+    }
+
+    function test_ReviewerDisputeCount_ResetsOnReRegister() public {
+        _registerReviewers();
+
+        // Run one dispute so count = 1 for all
+        address[5] memory panel = _runFullDispute(buyer, seller, 100);
+
+        // reviewer1 leaves and re-registers
+        address r = panel[0];
+        vm.prank(r);
+        escrow.removeFromPool();
+        assertFalse(escrow.isReviewer(r));
+
+        vm.prank(r);
+        escrow.registerAsReviewer();
+        assertEq(escrow.reviewerDisputeCount(r), 0);
+    }
+
+    function test_ReviewerAutoEjected_After10Disputes() public {
+        // Need 10 unique buyers/sellers so reviewers aren't excluded as parties
+        address[10] memory buyers;
+        address[10] memory sellers;
+        for (uint256 i = 0; i < 10; i++) {
+            buyers[i]  = address(uint160(0xB000 + i));
+            sellers[i] = address(uint160(0xA000 + i));
+            vm.deal(buyers[i],  10 ether);
+            vm.deal(sellers[i], 1 ether);
+        }
+
+        _registerReviewers();
+
+        // Run 9 disputes — reviewers stay in pool
+        for (uint256 i = 0; i < 9; i++) {
+            _runFullDispute(buyers[i], sellers[i], 100);
+        }
+        assertTrue(escrow.isReviewer(reviewer1)); // still in pool after 9
+
+        // 10th dispute triggers auto-eject
+        _runFullDispute(buyers[9], sellers[9], 100);
+
+        // All 5 reviewers should now be ejected
+        assertFalse(escrow.isReviewer(reviewer1));
+        assertFalse(escrow.isReviewer(reviewer2));
+        assertFalse(escrow.isReviewer(reviewer3));
+        assertFalse(escrow.isReviewer(reviewer4));
+        assertFalse(escrow.isReviewer(reviewer5));
+        assertEq(escrow.getReviewerPool().length, 0);
+    }
+
+    function test_ReviewerCanReRegisterAfterAutoEject() public {
+        address[10] memory buyers;
+        address[10] memory sellers;
+        for (uint256 i = 0; i < 10; i++) {
+            buyers[i]  = address(uint160(0xC000 + i));
+            sellers[i] = address(uint160(0xD000 + i));
+            vm.deal(buyers[i],  10 ether);
+            vm.deal(sellers[i], 1 ether);
+        }
+
+        _registerReviewers();
+
+        // Run 10 disputes → auto-eject all reviewers
+        for (uint256 i = 0; i < 10; i++) {
+            _runFullDispute(buyers[i], sellers[i], 100);
+        }
+
+        assertFalse(escrow.isReviewer(reviewer1));
+
+        // reviewer1 re-registers — count resets to 0
+        vm.prank(reviewer1);
+        escrow.registerAsReviewer();
+
+        assertTrue(escrow.isReviewer(reviewer1));
+        assertEq(escrow.reviewerDisputeCount(reviewer1), 0);
+    }
+
+    function test_AutoEject_DoesNotEjectReviewersBelow10() public {
+        // reviewers 1-5 registered; run only 5 disputes
+        address[5] memory buyers2;
+        address[5] memory sellers2;
+        for (uint256 i = 0; i < 5; i++) {
+            buyers2[i]  = address(uint160(0xE000 + i));
+            sellers2[i] = address(uint160(0xF000 + i));
+            vm.deal(buyers2[i],  10 ether);
+            vm.deal(sellers2[i], 1 ether);
+        }
+
+        _registerReviewers();
+        for (uint256 i = 0; i < 5; i++) {
+            _runFullDispute(buyers2[i], sellers2[i], 100);
+        }
+
+        // Count = 5, still in pool
+        assertTrue(escrow.isReviewer(reviewer1));
+        assertEq(escrow.reviewerDisputeCount(reviewer1), 5);
+        assertEq(escrow.getReviewerPool().length, 5);
+    }
+
+    function test_AutoEject_ReplacedByNewReviewer() public {
+        // After auto-eject, a new reviewer can join to replace the slot
+        address[10] memory buyers;
+        address[10] memory sellers;
+        for (uint256 i = 0; i < 10; i++) {
+            buyers[i]  = address(uint160(0x2000 + i));
+            sellers[i] = address(uint160(0x3000 + i));
+            vm.deal(buyers[i],  10 ether);
+            vm.deal(sellers[i], 1 ether);
+        }
+
+        _registerReviewers();
+        for (uint256 i = 0; i < 10; i++) {
+            _runFullDispute(buyers[i], sellers[i], 100);
+        }
+
+        assertEq(escrow.getReviewerPool().length, 0);
+
+        // New reviewer joins
+        address newReviewer = makeAddr("newReviewer");
+        vm.prank(newReviewer);
+        escrow.registerAsReviewer();
+
+        assertTrue(escrow.isReviewer(newReviewer));
+        assertEq(escrow.getReviewerPool().length, 1);
+        assertEq(escrow.reviewerDisputeCount(newReviewer), 0);
+    }
 }

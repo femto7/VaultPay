@@ -60,13 +60,14 @@ contract VaultPayEscrow is ReentrancyGuard {
     uint256 public dealCount;
     address public feeRecipient;
 
-    uint256 public constant MAX_FEE_BPS         = 500;      // Max 5%
-    uint256 public constant MIN_DELIVERY_PERIOD = 1 days;
-    uint256 public constant DISPUTE_WINDOW      = 3 days;   // Time after delivery to open dispute
-    uint256 public constant REFUND_TIMEOUT      = 14 days;  // Auto-refund if seller ghosts
-    uint256 public constant VOTING_PERIOD       = 48 hours; // Reviewer voting window
-    uint256 public constant MAX_REVIEWERS       = 10;
-    uint256 public constant PANEL_SIZE          = 5;        // Reviewers selected per dispute
+    uint256 public constant MAX_FEE_BPS              = 500;   // Max 5%
+    uint256 public constant MIN_DELIVERY_PERIOD      = 1 days;
+    uint256 public constant DISPUTE_WINDOW           = 3 days;   // Time after delivery to open dispute
+    uint256 public constant REFUND_TIMEOUT           = 14 days;  // Auto-refund if seller ghosts
+    uint256 public constant VOTING_PERIOD            = 48 hours; // Reviewer voting window
+    uint256 public constant MAX_REVIEWERS            = 10;
+    uint256 public constant PANEL_SIZE               = 5;        // Reviewers selected per dispute
+    uint256 public constant MAX_DISPUTES_PER_CYCLE   = 10;       // Auto-eject after 10 selections
 
     mapping(uint256 => Deal) public deals;
     mapping(uint256 => Dispute) public disputes;
@@ -74,6 +75,7 @@ contract VaultPayEscrow is ReentrancyGuard {
 
     address[] public reviewerPool;
     mapping(address => bool) public isReviewer;
+    mapping(address => uint256) public reviewerDisputeCount; // resets on re-registration
 
     // ─── Events ──────────────────────────────────────────────────────────
     event DealCreated(uint256 indexed dealId, address indexed buyer, address indexed seller, uint256 amount);
@@ -86,6 +88,7 @@ contract VaultPayEscrow is ReentrancyGuard {
     event DealCancelled(uint256 indexed dealId);
     event ReviewerRegistered(address indexed reviewer);
     event ReviewerRemoved(address indexed reviewer);
+    event ReviewerAutoEjected(address indexed reviewer, uint256 disputeCount);
     event VoteSubmitted(uint256 indexed dealId, address indexed reviewer, uint8 sellerPercent);
     event DisputeFinalized(uint256 indexed dealId, uint8 sellerPercent, uint256 voterCount);
 
@@ -127,34 +130,36 @@ contract VaultPayEscrow is ReentrancyGuard {
 
     // ─── Reviewer Pool ───────────────────────────────────────────────────
 
-    /// @notice Anyone can join the reviewer pool (max 10 reviewers)
+    /// @notice Anyone can join the reviewer pool (max 10 reviewers). Resets dispute counter.
     function registerAsReviewer() external {
         require(!isReviewer[msg.sender], "Already a reviewer");
         require(reviewerPool.length < MAX_REVIEWERS, "Reviewer pool full");
 
         isReviewer[msg.sender] = true;
+        reviewerDisputeCount[msg.sender] = 0; // fresh cycle on each registration
         reviewerPool.push(msg.sender);
 
         emit ReviewerRegistered(msg.sender);
     }
 
-    /// @notice A reviewer can voluntarily leave the pool
+    /// @notice A reviewer can voluntarily leave the pool at any time
     function removeFromPool() external {
         require(isReviewer[msg.sender], "Not a reviewer");
+        _removeFromPool(msg.sender);
+        emit ReviewerRemoved(msg.sender);
+    }
 
-        isReviewer[msg.sender] = false;
-
-        // Swap-and-pop to remove the reviewer from the array
+    /// @dev Shared removal logic (voluntary or auto-eject)
+    function _removeFromPool(address reviewer) internal {
+        isReviewer[reviewer] = false;
         uint256 len = reviewerPool.length;
         for (uint256 i = 0; i < len; i++) {
-            if (reviewerPool[i] == msg.sender) {
+            if (reviewerPool[i] == reviewer) {
                 reviewerPool[i] = reviewerPool[len - 1];
                 reviewerPool.pop();
                 break;
             }
         }
-
-        emit ReviewerRemoved(msg.sender);
     }
 
     // ─── Core: Create Deal ───────────────────────────────────────────────
@@ -327,6 +332,7 @@ contract VaultPayEscrow is ReentrancyGuard {
 
             if (!isParty && !alreadyPicked) {
                 voting.reviewers[selected] = candidate;
+                reviewerDisputeCount[candidate]++;
                 selected++;
             }
             nonce++;
@@ -421,6 +427,9 @@ contract VaultPayEscrow is ReentrancyGuard {
         // Distribute payouts via helper to keep this function's stack shallow
         _distributeDisputePayouts(dealId, result, actualVoters, actualVoterCount);
 
+        // Auto-eject reviewers who have reached their 10-dispute cycle limit
+        _autoEjectExhaustedReviewers(dealId);
+
         emit DisputeFinalized(dealId, result, actualVoterCount);
         emit DisputeResolved(dealId, result);
     }
@@ -459,6 +468,20 @@ contract VaultPayEscrow is ReentrancyGuard {
                         _transfer(deal.token, actualVoters[i], payout);
                     }
                 }
+            }
+        }
+    }
+
+    /// @dev Auto-eject panel reviewers who have reached MAX_DISPUTES_PER_CYCLE selections.
+    function _autoEjectExhaustedReviewers(uint256 dealId) internal {
+        DisputeVoting storage voting = disputeVotings[dealId];
+        for (uint256 i = 0; i < PANEL_SIZE; i++) {
+            address reviewer = voting.reviewers[i];
+            if (reviewer != address(0) && isReviewer[reviewer]
+                && reviewerDisputeCount[reviewer] >= MAX_DISPUTES_PER_CYCLE)
+            {
+                _removeFromPool(reviewer);
+                emit ReviewerAutoEjected(reviewer, reviewerDisputeCount[reviewer]);
             }
         }
     }

@@ -3,7 +3,7 @@ import { VAULTPAY_ADDRESS, DEAL_STATUS, STATUS_COLORS, VAULTPAY_ABI, type DealSt
 
 describe("VAULTPAY_ADDRESS", () => {
   it("has baseSepolia address", () => {
-    expect(VAULTPAY_ADDRESS.baseSepolia).toBe("0xdfeA1520d874d189e13c4F023b2d3Bba4A193eAD");
+    expect(VAULTPAY_ADDRESS.baseSepolia).toBe("0x948425237624EB0ebb27B8dBF6F12FE5cFEA0911");
   });
 
   it("has placeholder base and arbitrum addresses", () => {
