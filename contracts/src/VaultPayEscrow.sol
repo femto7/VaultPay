@@ -278,7 +278,15 @@ contract VaultPayEscrow is ReentrancyGuard {
         if (deal.status == DealStatus.Delivered) {
             require(block.timestamp <= deal.disputeDeadline, "Dispute window closed");
         }
-        require(reviewerPool.length >= PANEL_SIZE, "Not enough reviewers in pool");
+        // Count eligible reviewers (exclude the deal's buyer and seller)
+        uint256 eligibleCount = 0;
+        uint256 poolLen = reviewerPool.length;
+        for (uint256 i = 0; i < poolLen; i++) {
+            if (reviewerPool[i] != deal.buyer && reviewerPool[i] != deal.seller) {
+                eligibleCount++;
+            }
+        }
+        require(eligibleCount >= PANEL_SIZE, "Not enough eligible reviewers");
 
         deal.status = DealStatus.Disputed;
         disputes[dealId] = Dispute({
@@ -290,12 +298,11 @@ contract VaultPayEscrow is ReentrancyGuard {
             sellerPercent: 0
         });
 
-        // Select 5 unique reviewers pseudo-randomly
+        // Select 5 unique reviewers pseudo-randomly, excluding buyer and seller
         DisputeVoting storage voting = disputeVotings[dealId];
         voting.deadline = block.timestamp + VOTING_PERIOD;
         voting.finalized = false;
 
-        uint256 poolLen = reviewerPool.length;
         uint256 selected = 0;
         uint256 nonce = 0;
 
@@ -306,6 +313,9 @@ contract VaultPayEscrow is ReentrancyGuard {
             uint256 idx = uint256(seed) % poolLen;
             address candidate = reviewerPool[idx];
 
+            // Skip deal parties (conflict of interest)
+            bool isParty = (candidate == deal.buyer || candidate == deal.seller);
+
             // Ensure uniqueness within the panel
             bool alreadyPicked = false;
             for (uint256 k = 0; k < selected; k++) {
@@ -315,7 +325,7 @@ contract VaultPayEscrow is ReentrancyGuard {
                 }
             }
 
-            if (!alreadyPicked) {
+            if (!isParty && !alreadyPicked) {
                 voting.reviewers[selected] = candidate;
                 selected++;
             }

@@ -595,13 +595,50 @@ contract VaultPayEscrowTest is Test {
 
     function test_RevertDispute_NotEnoughReviewers() public {
         uint256 dealId = _createAndFundETHDeal();
-        // Only 2 reviewers registered (need 5)
+        // Only 2 reviewers registered (need 5 eligible)
         vm.prank(reviewer1); escrow.registerAsReviewer();
         vm.prank(reviewer2); escrow.registerAsReviewer();
 
         vm.prank(buyer);
-        vm.expectRevert("Not enough reviewers in pool");
+        vm.expectRevert("Not enough eligible reviewers");
         escrow.openDispute(dealId, "Issue", "");
+    }
+
+    function test_RevertDispute_BuyerInPool_NotEnoughEligible() public {
+        // Pool has 5 reviewers but buyer and seller take 2 spots → only 3 eligible
+        uint256 dealId = _createAndFundETHDeal();
+        vm.prank(buyer);   escrow.registerAsReviewer();
+        vm.prank(seller);  escrow.registerAsReviewer();
+        vm.prank(reviewer1); escrow.registerAsReviewer();
+        vm.prank(reviewer2); escrow.registerAsReviewer();
+        vm.prank(reviewer3); escrow.registerAsReviewer();
+        // 5 in pool, but buyer+seller are ineligible → only 3 eligible, need 5
+
+        vm.prank(buyer);
+        vm.expectRevert("Not enough eligible reviewers");
+        escrow.openDispute(dealId, "Issue", "");
+    }
+
+    function test_Dispute_BuyerInPool_NotSelectedAsReviewer() public {
+        // Even if buyer and seller are registered, they must NOT appear in the panel
+        uint256 dealId = _createAndFundETHDeal();
+        vm.prank(buyer);   escrow.registerAsReviewer();
+        vm.prank(seller);  escrow.registerAsReviewer();
+        vm.prank(reviewer1); escrow.registerAsReviewer();
+        vm.prank(reviewer2); escrow.registerAsReviewer();
+        vm.prank(reviewer3); escrow.registerAsReviewer();
+        vm.prank(reviewer4); escrow.registerAsReviewer();
+        vm.prank(reviewer5); escrow.registerAsReviewer();
+        // 7 in pool: buyer + seller + 5 reviewers → 5 eligible
+
+        vm.prank(buyer);
+        escrow.openDispute(dealId, "Issue", "");
+
+        (address[5] memory panel,,,,) = escrow.getDisputeVoting(dealId);
+        for (uint256 i = 0; i < 5; i++) {
+            assertTrue(panel[i] != buyer,  "Buyer must not be on panel");
+            assertTrue(panel[i] != seller, "Seller must not be on panel");
+        }
     }
 
     function test_RevertSubmitVote_NotReviewer() public {

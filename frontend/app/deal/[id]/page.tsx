@@ -41,7 +41,7 @@ import {
 import { useToast } from "@/components/Toast";
 import { DealDetailSkeleton } from "@/components/Skeleton";
 
-const BASESCAN_URL = "https://sepolia.basescan.org/address/0xd36B0A56ccDED60a4Fb21201bB391521a34556A4";
+const BASESCAN_URL = "https://sepolia.basescan.org/address/0xdfeA1520d874d189e13c4F023b2d3Bba4A193eAD";
 
 const STATUS_ICON_MAP: Record<DealStatus, React.ReactNode> = {
   Created: <Clock className="w-4 h-4" />,
