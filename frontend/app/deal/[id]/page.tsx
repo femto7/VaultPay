@@ -165,6 +165,14 @@ function DisputeModal({ isOpen, onClose, onSubmit }: {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Reset form when modal opens
+  const prevOpen = useRef(false);
+  if (isOpen && !prevOpen.current) {
+    setReason("");
+    setImages([]);
+  }
+  prevOpen.current = isOpen;
+
   if (!isOpen) return null;
 
   async function addFiles(files: FileList | File[]) {
@@ -313,13 +321,13 @@ function DisputeModal({ isOpen, onClose, onSubmit }: {
 }
 
 export default function DealPage({ params }: { params: { id: string } }) {
-  const dealId = parseInt(params.id);
+  const dealId = Number.isNaN(parseInt(params.id)) ? -1 : parseInt(params.id);
   const searchParams = useSearchParams();
   const fromMarketplace = searchParams.get("from") === "marketplace";
   const [showDispute, setShowDispute] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const { addToast } = useToast();
+  const { addToast, removeToast } = useToast();
 
   const { deal, isLoading } = useDeal(dealId);
   const currentUser = useCurrentUser();
@@ -360,11 +368,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
         message: "Transaction submitted successfully",
         txHash,
       });
-      // Remove pending toast
-      setTimeout(() => {
-        const el = document.querySelector(`[data-toast-id="${toastId}"]`);
-        if (el) el.remove();
-      }, 0);
+      removeToast(toastId);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message.slice(0, 120) : "Transaction failed";
       setTxError(msg);
@@ -570,7 +574,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
             )}
 
             {/* BUYER: waiting for seller */}
-            {deal.status === "Funded" && (isBuyer || (!isSeller && !isOpenListing)) && (
+            {deal.status === "Funded" && isBuyer && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2.5 p-3 rounded-xl bg-blue-500/[0.04] border border-blue-500/10">
                   <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
@@ -598,7 +602,7 @@ export default function DealPage({ params }: { params: { id: string } }) {
             )}
 
             {/* BUYER: release or dispute after delivery */}
-            {deal.status === "Delivered" && (isBuyer || (!isSeller && currentUser)) && (
+            {deal.status === "Delivered" && isBuyer && (
               <div className="space-y-3">
                 <button
                   onClick={() => handleAction(() => releaseFunds(dealId), "Release Funds")}

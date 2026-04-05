@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 
 export const ETH_ADDRESS = "0x0000000000000000000000000000000000000000" as `0x${string}`;
 
-function useContractAddress() {
+export function useContractAddress() {
   const chainId = useChainId();
   if (chainId === baseSepolia.id) return VAULTPAY_ADDRESS.baseSepolia;
   return null;
@@ -36,7 +36,7 @@ function parseDeal(id: number, raw: unknown): Deal {
     disputeDeadline: Number(r.disputeDeadline),
     title: r.title,
     description: r.description,
-    status: DEAL_STATUS[r.status] as DealStatus,
+    status: (DEAL_STATUS[r.status] ?? "Created") as DealStatus,
   };
 }
 
@@ -83,9 +83,9 @@ export function useAllDeals() {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!count || !address || !publicClient) return;
+    if (!count || !address || !publicClient) { setDeals([]); return; }
     const total = Number(count);
-    if (total === 0) return;
+    if (total === 0) { setDeals([]); setIsLoading(false); return; }
 
     setIsLoading(true);
     const ids = Array.from({ length: total }, (_, i) => i);

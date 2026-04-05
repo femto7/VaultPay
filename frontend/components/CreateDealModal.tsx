@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import { X, Loader2, ArrowRight, Info, Lock, ImagePlus, Trash2, CheckCircle2 } from "lucide-react";
 import { useCreateDeal, ETH_ADDRESS } from "@/lib/useVaultPay";
 import { useToast } from "@/components/Toast";
@@ -46,11 +46,10 @@ export default function CreateDealModal({ isOpen, onClose }: CreateDealModalProp
   const [txError, setTxError] = useState<string | null>(null);
   const { addToast } = useToast();
 
+  // Only ETH and USDC are supported for now — USDT/DAI not deployed on Base Sepolia
   const TOKEN_ADDRESSES: Record<string, `0x${string}`> = {
     eth: ETH_ADDRESS,
     usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-    usdt: "0x0000000000000000000000000000000000000000",
-    dai:  "0x0000000000000000000000000000000000000000",
   };
 
   const fee = form.amount ? (parseFloat(form.amount) * 0.005).toFixed(4) : "0";
@@ -90,12 +89,20 @@ export default function CreateDealModal({ isOpen, onClose }: CreateDealModalProp
     });
   }
 
-  const onDrop = useCallback((e: React.DragEvent) => {
+  function onDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDragging(false);
     addFiles(e.dataTransfer.files);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }
+
+  // Reset form when modal opens
+  const prevOpen = useRef(false);
+  if (isOpen && !prevOpen.current) {
+    setForm({ buyer: "", amount: "", token: "eth", deliveryDays: "7", category: "", title: "", description: "" });
+    setImages([]);
+    setTxError(null);
+  }
+  prevOpen.current = isOpen;
 
   if (!isOpen) return null;
 
@@ -218,7 +225,7 @@ export default function CreateDealModal({ isOpen, onClose }: CreateDealModalProp
                 <input
                   type="number"
                   step="0.0001"
-                  min="0"
+                  min="0.0001"
                   placeholder="0.00"
                   className="input-field"
                   value={form.amount}
@@ -231,8 +238,6 @@ export default function CreateDealModal({ isOpen, onClose }: CreateDealModalProp
                 <select className="input-field" value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })}>
                   <option value="eth">ETH</option>
                   <option value="usdc">USDC</option>
-                  <option value="usdt">USDT</option>
-                  <option value="dai">DAI</option>
                 </select>
               </div>
             </div>

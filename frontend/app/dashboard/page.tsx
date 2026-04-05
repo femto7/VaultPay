@@ -60,7 +60,7 @@ function DashboardContent() {
 
   const stats = {
     active: myDeals.filter((d) => ["Created", "Funded", "Delivered"].includes(d.status)).length,
-    completed: myDeals.filter((d) => ["Released", "Resolved"].includes(d.status)).length,
+    completed: myDeals.filter((d) => ["Released", "Resolved", "Refunded", "Cancelled"].includes(d.status)).length,
     disputed: myDeals.filter((d) => d.status === "Disputed").length,
   };
 

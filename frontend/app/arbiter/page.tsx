@@ -10,7 +10,7 @@ import {
 import {
   useAllDeals, useDisputeVoting, useReviewerPool, useIsReviewer,
   useRegisterAsReviewer, useRemoveFromPool, useSubmitVote, useFinalizeDispute,
-  formatAmount, tokenSymbol, formatDeadline, type DisputeVoting,
+  useContractAddress, formatAmount, tokenSymbol, formatDeadline, type DisputeVoting,
 } from "@/lib/useVaultPay";
 import { VAULTPAY_ABI, VAULTPAY_ADDRESS, type Deal } from "@/lib/contracts";
 import { shortenAddress } from "@/lib/utils";
@@ -175,11 +175,13 @@ function PoolStatusBar() {
 // ─── Dispute details ──────────────────────────────────────────────────────────
 
 function DisputeDetails({ dealId }: { dealId: number }) {
+  const contractAddress = useContractAddress();
   const { data, isLoading } = useReadContract({
-    address: VAULTPAY_ADDRESS.baseSepolia,
+    address: contractAddress ?? undefined,
     abi: VAULTPAY_ABI,
     functionName: "getDispute",
     args: [BigInt(dealId)],
+    query: { enabled: !!contractAddress },
   });
 
   if (isLoading) return (
@@ -277,11 +279,11 @@ function VotingPanel({ deal, userAddress }: { deal: Deal; userAddress: string | 
 
   // Tally
   let votes0 = 0, votes50 = 0, votes100 = 0;
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < voting.reviewers.length; i++) {
     if (voting.hasVoted[i]) {
       if (voting.votes[i] === 0) votes0++;
       else if (voting.votes[i] === 50) votes50++;
-      else votes100++;
+      else if (voting.votes[i] === 100) votes100++;
     }
   }
 
@@ -448,9 +450,9 @@ function VotingPanel({ deal, userAddress }: { deal: Deal; userAddress: string | 
           <div>
             <p className="text-[12px] font-semibold text-violet-300">Dispute finalized</p>
             <p className="text-[11px] text-surface-600 mt-0.5">
-              Result: {voting.votes.filter((_, i) => voting.hasVoted[i]).length === 0
+              Result: {voteCount === 0
                 ? "50/50 split (no votes — default)"
-                : `seller gets ${votes100 > votes0 && votes100 >= votes50 ? "100" : votes0 > votes100 && votes0 > votes50 ? "0" : "50"}%`}
+                : `seller gets ${votes100 > votes0 && votes100 > votes50 ? "100" : votes0 > votes100 && votes0 > votes50 ? "0" : "50"}%`}
             </p>
           </div>
         </div>
