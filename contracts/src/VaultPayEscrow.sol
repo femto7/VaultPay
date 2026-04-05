@@ -68,6 +68,7 @@ contract VaultPayEscrow is ReentrancyGuard {
     uint256 public constant MAX_REVIEWERS            = 10;
     uint256 public constant PANEL_SIZE               = 5;        // Reviewers selected per dispute
     uint256 public constant MAX_DISPUTES_PER_CYCLE   = 10;       // Auto-eject after 10 selections
+    uint256 public constant MIN_REVIEWER_AGE         = 7 days;  // Must be registered 7+ days before deal creation
 
     mapping(uint256 => Deal) public deals;
     mapping(uint256 => Dispute) public disputes;
@@ -78,6 +79,7 @@ contract VaultPayEscrow is ReentrancyGuard {
     mapping(address => bool)    public hasBeenParty;           // ever buyer or seller → banned from pool
     mapping(address => uint256) public reviewerDisputeCount;   // selections since last registration
     mapping(address => uint256) public ejectedAtGeneration;    // generation when auto-ejected (0 = never)
+    mapping(address => uint256) public registeredAt;           // timestamp of last registration
     uint256 public poolGeneration;                             // increments each time pool fills to 10
 
     // ─── Events ──────────────────────────────────────────────────────────
@@ -147,6 +149,7 @@ contract VaultPayEscrow is ReentrancyGuard {
 
         isReviewer[msg.sender] = true;
         reviewerDisputeCount[msg.sender] = 0;
+        registeredAt[msg.sender] = block.timestamp;
         reviewerPool.push(msg.sender);
 
         // Pool just became full → advance generation (enables ejected reviewers to re-register next time)
@@ -316,9 +319,17 @@ contract VaultPayEscrow is ReentrancyGuard {
         if (deal.status == DealStatus.Delivered) {
             require(block.timestamp <= deal.disputeDeadline, "Dispute window closed");
         }
-        // Pool must be full (10 reviewers) before any dispute can be opened
+        // Pool must be full AND at least PANEL_SIZE reviewers registered before deal creation
         uint256 poolLen = reviewerPool.length;
         require(poolLen == MAX_REVIEWERS, "Reviewer pool must be full");
+
+        uint256 agedCount = 0;
+        for (uint256 i = 0; i < poolLen; i++) {
+            if (registeredAt[reviewerPool[i]] + MIN_REVIEWER_AGE <= deal.createdAt) {
+                agedCount++;
+            }
+        }
+        require(agedCount >= PANEL_SIZE, "Not enough seasoned reviewers");
 
         deal.status = DealStatus.Disputed;
         disputes[dealId] = Dispute({
@@ -345,6 +356,9 @@ contract VaultPayEscrow is ReentrancyGuard {
             uint256 idx = uint256(seed) % poolLen;
             address candidate = reviewerPool[idx];
 
+            // Skip if not aged enough (registered after deal creation + 7-day buffer)
+            bool notAged = registeredAt[candidate] + MIN_REVIEWER_AGE > deal.createdAt;
+
             // Ensure uniqueness within the panel
             // (parties are already banned from the pool at registration — double-check for safety)
             bool alreadyPicked = (candidate == deal.buyer || candidate == deal.seller);
@@ -355,7 +369,7 @@ contract VaultPayEscrow is ReentrancyGuard {
                 }
             }
 
-            if (!alreadyPicked) {
+            if (!notAged && !alreadyPicked) {
                 voting.reviewers[selected] = candidate;
                 reviewerDisputeCount[candidate]++;
                 selected++;

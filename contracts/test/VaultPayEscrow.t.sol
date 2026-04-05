@@ -132,6 +132,8 @@ contract VaultPayEscrowTest is Test {
     }
 
     /// @dev Fill the pool to exactly 10 reviewers (required to open any dispute).
+    ///      Warps 7 days + 1 second after registration so reviewers are aged
+    ///      relative to any deal created after this call.
     function _registerReviewers() internal {
         vm.prank(reviewer1);  escrow.registerAsReviewer();
         vm.prank(reviewer2);  escrow.registerAsReviewer();
@@ -143,6 +145,7 @@ contract VaultPayEscrowTest is Test {
         vm.prank(reviewer8);  escrow.registerAsReviewer();
         vm.prank(reviewer9);  escrow.registerAsReviewer();
         vm.prank(reviewer10); escrow.registerAsReviewer();
+        vm.warp(block.timestamp + 7 days + 1); // satisfy MIN_REVIEWER_AGE vs deal.createdAt
     }
 
     /// @dev All 5 selected reviewers vote with the same value, warp past deadline, finalize.
@@ -1001,6 +1004,9 @@ contract VaultPayEscrowTest is Test {
     function test_NoFundsLeftInContract_AfterAllSettlements() public {
         uint256 fee = (DEAL_AMOUNT * FEE_BPS) / 10000;
 
+        // Register reviewers first and warp 7 days so they are aged for any deal created after
+        _registerReviewers();
+
         // Deal 1: normal release
         vm.prank(seller);
         uint256 d1 = escrow.createDeal(buyer, address(0), DEAL_AMOUNT, 7, "D1", "");
@@ -1024,7 +1030,6 @@ contract VaultPayEscrowTest is Test {
         escrow.releaseFunds(d1);
 
         // Settle d2 via community vote
-        _registerReviewers();
         vm.prank(buyer2);
         escrow.openDispute(d2, "Partial", "");
         _voteAllAndFinalize(d2, 50);
@@ -1369,5 +1374,80 @@ contract VaultPayEscrowTest is Test {
         assertTrue(escrow.isReviewer(newReviewer));
         assertEq(escrow.reviewerDisputeCount(newReviewer), 0);
         assertEq(escrow.getReviewerPool().length, 6);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  15. SYBIL PROTECTION — MIN_REVIEWER_AGE (7 days)
+    // ═════════════════════════════════════════════════════════════════════════
+
+    /// @dev Pool is full but all reviewers registered AFTER the deal was created.
+    ///      None are aged → must revert with "Not enough seasoned reviewers".
+    function test_RevertDispute_ReviewersNotSeasoned() public {
+        // Create & fund deal first
+        uint256 dealId = _createAndFundETHDeal();
+
+        // Register reviewers AFTER deal creation — they are not aged relative to deal.createdAt
+        vm.prank(reviewer1);  escrow.registerAsReviewer();
+        vm.prank(reviewer2);  escrow.registerAsReviewer();
+        vm.prank(reviewer3);  escrow.registerAsReviewer();
+        vm.prank(reviewer4);  escrow.registerAsReviewer();
+        vm.prank(reviewer5);  escrow.registerAsReviewer();
+        vm.prank(reviewer6);  escrow.registerAsReviewer();
+        vm.prank(reviewer7);  escrow.registerAsReviewer();
+        vm.prank(reviewer8);  escrow.registerAsReviewer();
+        vm.prank(reviewer9);  escrow.registerAsReviewer();
+        vm.prank(reviewer10); escrow.registerAsReviewer();
+        // Even warping 7 days doesn't help — check uses deal.createdAt as the cutoff
+        vm.warp(block.timestamp + 7 days + 1);
+
+        vm.prank(buyer);
+        vm.expectRevert("Not enough seasoned reviewers");
+        escrow.openDispute(dealId, "Issue", "");
+    }
+
+    /// @dev Sybil attack: attacker registers 3 fake reviewer accounts AFTER creating a deal.
+    ///      Even after waiting 7 days (wall clock), dispute was opened before registration + 7 days
+    ///      relative to deal.createdAt → Sybil accounts cannot be selected for that deal's panel.
+    function test_Sybil_RegistrationAfterDeal_NotEligible() public {
+        // Legitimate reviewers registered and aged (8 of them)
+        address[8] memory legit = [
+            makeAddr("legit1"), makeAddr("legit2"), makeAddr("legit3"), makeAddr("legit4"),
+            makeAddr("legit5"), makeAddr("legit6"), makeAddr("legit7"), makeAddr("legit8")
+        ];
+        for (uint256 i = 0; i < 8; i++) {
+            vm.prank(legit[i]); escrow.registerAsReviewer();
+        }
+        vm.warp(block.timestamp + 7 days + 1); // legit reviewers aged
+
+        // Attacker creates a deal
+        address sybilBuyer  = makeAddr("sybilBuyer");
+        address sybilSeller = makeAddr("sybilSeller");
+        vm.deal(sybilBuyer, 10 ether); vm.deal(sybilSeller, 1 ether);
+        vm.prank(sybilSeller);
+        uint256 dealId = escrow.createDeal(sybilBuyer, address(0), DEAL_AMOUNT, 7, "Sybil", "");
+        uint256 fee = (DEAL_AMOUNT * FEE_BPS) / 10000;
+        vm.prank(sybilBuyer);
+        escrow.fundDeal{value: DEAL_AMOUNT + fee}(dealId);
+
+        // Attacker registers 2 Sybil accounts AFTER deal creation → not aged for this deal
+        address sybil1 = makeAddr("sybil1");
+        address sybil2 = makeAddr("sybil2");
+        vm.prank(sybil1); escrow.registerAsReviewer();
+        vm.prank(sybil2); escrow.registerAsReviewer();
+        // pool is now 10 (8 legit + 2 sybil)
+
+        // Even warping 7 days from Sybil registration: sybils are not aged vs deal.createdAt
+        vm.warp(block.timestamp + 7 days + 1);
+
+        // Opening dispute must succeed (8 aged legit reviewers ≥ PANEL_SIZE=5)
+        vm.prank(sybilBuyer);
+        escrow.openDispute(dealId, "Issue", "");
+
+        // Verify selected panel contains only legit reviewers (none are sybil)
+        (address[5] memory panel,,,,) = escrow.getDisputeVoting(dealId);
+        for (uint256 i = 0; i < 5; i++) {
+            assertTrue(panel[i] != sybil1 && panel[i] != sybil2,
+                "Sybil reviewer was selected - age check failed");
+        }
     }
 }
