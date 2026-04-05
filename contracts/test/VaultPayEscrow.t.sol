@@ -66,6 +66,7 @@ contract ReentrancyAttacker {
 
 // ─── Main Test Suite ─────────────────────────────────────────────────────────
 contract VaultPayEscrowTest is Test {
+    using stdStorage for StdStorage;
     VaultPayEscrow public escrow;
     MockERC20 public usdc;
 
@@ -77,12 +78,17 @@ contract VaultPayEscrowTest is Test {
     address public buyer2      = makeAddr("buyer2");
     address public seller2     = makeAddr("seller2");
 
-    // Community reviewer pool
-    address public reviewer1 = makeAddr("reviewer1");
-    address public reviewer2 = makeAddr("reviewer2");
-    address public reviewer3 = makeAddr("reviewer3");
-    address public reviewer4 = makeAddr("reviewer4");
-    address public reviewer5 = makeAddr("reviewer5");
+    // Community reviewer pool — pool must be full (10) to open disputes
+    address public reviewer1  = makeAddr("reviewer1");
+    address public reviewer2  = makeAddr("reviewer2");
+    address public reviewer3  = makeAddr("reviewer3");
+    address public reviewer4  = makeAddr("reviewer4");
+    address public reviewer5  = makeAddr("reviewer5");
+    address public reviewer6  = makeAddr("reviewer6");
+    address public reviewer7  = makeAddr("reviewer7");
+    address public reviewer8  = makeAddr("reviewer8");
+    address public reviewer9  = makeAddr("reviewer9");
+    address public reviewer10 = makeAddr("reviewer10");
 
     uint256 constant DEAL_AMOUNT = 1 ether;
     uint256 constant FEE_BPS     = 50; // 0.5%
@@ -125,13 +131,18 @@ contract VaultPayEscrowTest is Test {
         escrow.fundDeal(dealId);
     }
 
-    /// @dev Register exactly 5 reviewers into the pool.
+    /// @dev Fill the pool to exactly 10 reviewers (required to open any dispute).
     function _registerReviewers() internal {
-        vm.prank(reviewer1); escrow.registerAsReviewer();
-        vm.prank(reviewer2); escrow.registerAsReviewer();
-        vm.prank(reviewer3); escrow.registerAsReviewer();
-        vm.prank(reviewer4); escrow.registerAsReviewer();
-        vm.prank(reviewer5); escrow.registerAsReviewer();
+        vm.prank(reviewer1);  escrow.registerAsReviewer();
+        vm.prank(reviewer2);  escrow.registerAsReviewer();
+        vm.prank(reviewer3);  escrow.registerAsReviewer();
+        vm.prank(reviewer4);  escrow.registerAsReviewer();
+        vm.prank(reviewer5);  escrow.registerAsReviewer();
+        vm.prank(reviewer6);  escrow.registerAsReviewer();
+        vm.prank(reviewer7);  escrow.registerAsReviewer();
+        vm.prank(reviewer8);  escrow.registerAsReviewer();
+        vm.prank(reviewer9);  escrow.registerAsReviewer();
+        vm.prank(reviewer10); escrow.registerAsReviewer();
     }
 
     /// @dev All 5 selected reviewers vote with the same value, warp past deadline, finalize.
@@ -593,52 +604,67 @@ contract VaultPayEscrowTest is Test {
         escrow.openDispute(dealId, "Changed my mind", "");
     }
 
-    function test_RevertDispute_NotEnoughReviewers() public {
+    function test_RevertDispute_PoolNotFull() public {
         uint256 dealId = _createAndFundETHDeal();
-        // Only 2 reviewers registered (need 5 eligible)
-        vm.prank(reviewer1); escrow.registerAsReviewer();
-        vm.prank(reviewer2); escrow.registerAsReviewer();
+        // Only 9 reviewers — pool must be exactly 10
+        vm.prank(reviewer1);  escrow.registerAsReviewer();
+        vm.prank(reviewer2);  escrow.registerAsReviewer();
+        vm.prank(reviewer3);  escrow.registerAsReviewer();
+        vm.prank(reviewer4);  escrow.registerAsReviewer();
+        vm.prank(reviewer5);  escrow.registerAsReviewer();
+        vm.prank(reviewer6);  escrow.registerAsReviewer();
+        vm.prank(reviewer7);  escrow.registerAsReviewer();
+        vm.prank(reviewer8);  escrow.registerAsReviewer();
+        vm.prank(reviewer9);  escrow.registerAsReviewer();
 
         vm.prank(buyer);
-        vm.expectRevert("Not enough eligible reviewers");
+        vm.expectRevert("Reviewer pool must be full");
         escrow.openDispute(dealId, "Issue", "");
     }
 
-    function test_RevertDispute_BuyerInPool_NotEnoughEligible() public {
-        // Pool has 5 reviewers but buyer and seller take 2 spots → only 3 eligible
-        uint256 dealId = _createAndFundETHDeal();
-        vm.prank(buyer);   escrow.registerAsReviewer();
-        vm.prank(seller);  escrow.registerAsReviewer();
-        vm.prank(reviewer1); escrow.registerAsReviewer();
-        vm.prank(reviewer2); escrow.registerAsReviewer();
-        vm.prank(reviewer3); escrow.registerAsReviewer();
-        // 5 in pool, but buyer+seller are ineligible → only 3 eligible, need 5
-
+    function test_RevertRegister_BuyerCannotBeReviewer() public {
+        // buyer has funded a deal → hasBeenParty = true → cannot register
+        _createAndFundETHDeal();
         vm.prank(buyer);
-        vm.expectRevert("Not enough eligible reviewers");
-        escrow.openDispute(dealId, "Issue", "");
+        vm.expectRevert("Deal parties cannot be reviewers");
+        escrow.registerAsReviewer();
     }
 
-    function test_Dispute_BuyerInPool_NotSelectedAsReviewer() public {
-        // Even if buyer and seller are registered, they must NOT appear in the panel
-        uint256 dealId = _createAndFundETHDeal();
-        vm.prank(buyer);   escrow.registerAsReviewer();
-        vm.prank(seller);  escrow.registerAsReviewer();
+    function test_RevertRegister_SellerCannotBeReviewer() public {
+        // seller has created a deal → hasBeenParty = true → cannot register
+        vm.prank(seller);
+        escrow.createDeal(buyer, address(0), DEAL_AMOUNT, 7, "Test", "");
+        vm.prank(seller);
+        vm.expectRevert("Deal parties cannot be reviewers");
+        escrow.registerAsReviewer();
+    }
+
+    function test_ReviewerEjectedWhenBecomesSeller() public {
+        // reviewer1 joins the pool, then creates a deal → auto-ejected
         vm.prank(reviewer1); escrow.registerAsReviewer();
-        vm.prank(reviewer2); escrow.registerAsReviewer();
-        vm.prank(reviewer3); escrow.registerAsReviewer();
-        vm.prank(reviewer4); escrow.registerAsReviewer();
-        vm.prank(reviewer5); escrow.registerAsReviewer();
-        // 7 in pool: buyer + seller + 5 reviewers → 5 eligible
+        assertTrue(escrow.isReviewer(reviewer1));
 
-        vm.prank(buyer);
-        escrow.openDispute(dealId, "Issue", "");
+        vm.prank(reviewer1);
+        escrow.createDeal(buyer, address(0), DEAL_AMOUNT, 7, "Deal", "");
 
-        (address[5] memory panel,,,,) = escrow.getDisputeVoting(dealId);
-        for (uint256 i = 0; i < 5; i++) {
-            assertTrue(panel[i] != buyer,  "Buyer must not be on panel");
-            assertTrue(panel[i] != seller, "Seller must not be on panel");
-        }
+        assertFalse(escrow.isReviewer(reviewer1));
+        assertTrue(escrow.hasBeenParty(reviewer1));
+    }
+
+    function test_ReviewerEjectedWhenBecomesBuyer() public {
+        // reviewer1 joins the pool, then funds a deal → auto-ejected
+        vm.prank(reviewer1); escrow.registerAsReviewer();
+        assertTrue(escrow.isReviewer(reviewer1));
+
+        vm.prank(seller);
+        uint256 dealId = escrow.createDeal(reviewer1, address(0), DEAL_AMOUNT, 7, "Deal", "");
+        uint256 fee = (DEAL_AMOUNT * FEE_BPS) / 10000;
+        vm.deal(reviewer1, 10 ether);
+        vm.prank(reviewer1);
+        escrow.fundDeal{value: DEAL_AMOUNT + fee}(dealId);
+
+        assertFalse(escrow.isReviewer(reviewer1));
+        assertTrue(escrow.hasBeenParty(reviewer1));
     }
 
     function test_RevertSubmitVote_NotReviewer() public {
@@ -1184,128 +1210,164 @@ contract VaultPayEscrowTest is Test {
         }
     }
 
-    function test_ReviewerDisputeCount_ResetsOnReRegister() public {
-        _registerReviewers();
+    function test_ReviewerDisputeCount_ResetsOnVoluntaryReRegister() public {
+        _registerReviewers(); // pool = 10, generation = 1
 
-        // Run one dispute so count = 1 for all
-        address[5] memory panel = _runFullDispute(buyer, seller, 100);
+        address[1] memory buyerArr  = [address(uint160(0xBB01))];
+        address[1] memory sellerArr = [address(uint160(0xAA01))];
+        vm.deal(buyerArr[0], 10 ether); vm.deal(sellerArr[0], 1 ether);
 
-        // reviewer1 leaves and re-registers
+        address[5] memory panel = _runFullDispute(buyerArr[0], sellerArr[0], 100);
+
+        // Voluntary leave → ejectedAtGeneration NOT set → can re-register freely
         address r = panel[0];
-        vm.prank(r);
-        escrow.removeFromPool();
+        vm.prank(r); escrow.removeFromPool();
         assertFalse(escrow.isReviewer(r));
+        assertEq(escrow.ejectedAtGeneration(r), 0); // not auto-ejected
 
-        vm.prank(r);
-        escrow.registerAsReviewer();
+        vm.prank(r); escrow.registerAsReviewer();
         assertEq(escrow.reviewerDisputeCount(r), 0);
+        assertTrue(escrow.isReviewer(r));
+    }
+
+    /// @dev Set reviewerDisputeCount to 9 for all 10 reviewers using stdstore,
+    ///      then run one dispute — all 5 selected will hit 10 and be auto-ejected.
+    function _presetCountsTo9() internal {
+        address[10] memory rs = [reviewer1, reviewer2, reviewer3, reviewer4, reviewer5,
+                                  reviewer6, reviewer7, reviewer8, reviewer9, reviewer10];
+        for (uint256 i = 0; i < 10; i++) {
+            stdstore.target(address(escrow))
+                .sig("reviewerDisputeCount(address)")
+                .with_key(rs[i])
+                .checked_write(uint256(9));
+        }
     }
 
     function test_ReviewerAutoEjected_After10Disputes() public {
-        // Need 10 unique buyers/sellers so reviewers aren't excluded as parties
-        address[10] memory buyers;
-        address[10] memory sellers;
+        _registerReviewers(); // generation = 1
+
+        _presetCountsTo9(); // all reviewers at count = 9
+
+        // One more dispute → 5 selected → all hit 10 → ejected
+        address b = address(uint160(0xB001)); address s = address(uint160(0xA001));
+        vm.deal(b, 10 ether); vm.deal(s, 1 ether);
+        _runFullDispute(b, s, 100);
+
+        // All 5 selected reviewers ejected; rest still in pool
+        uint256 remaining = escrow.getReviewerPool().length;
+        assertEq(remaining, 5); // 5 ejected, 5 remain
+
+        // Verify the 5 ejected have ejectedAtGeneration = 1
+        uint256 ejectedCount = 0;
+        address[10] memory rs = [reviewer1, reviewer2, reviewer3, reviewer4, reviewer5,
+                                  reviewer6, reviewer7, reviewer8, reviewer9, reviewer10];
         for (uint256 i = 0; i < 10; i++) {
-            buyers[i]  = address(uint160(0xB000 + i));
-            sellers[i] = address(uint160(0xA000 + i));
-            vm.deal(buyers[i],  10 ether);
-            vm.deal(sellers[i], 1 ether);
+            if (!escrow.isReviewer(rs[i])) {
+                ejectedCount++;
+                assertEq(escrow.ejectedAtGeneration(rs[i]), 1);
+            }
         }
-
-        _registerReviewers();
-
-        // Run 9 disputes — reviewers stay in pool
-        for (uint256 i = 0; i < 9; i++) {
-            _runFullDispute(buyers[i], sellers[i], 100);
-        }
-        assertTrue(escrow.isReviewer(reviewer1)); // still in pool after 9
-
-        // 10th dispute triggers auto-eject
-        _runFullDispute(buyers[9], sellers[9], 100);
-
-        // All 5 reviewers should now be ejected
-        assertFalse(escrow.isReviewer(reviewer1));
-        assertFalse(escrow.isReviewer(reviewer2));
-        assertFalse(escrow.isReviewer(reviewer3));
-        assertFalse(escrow.isReviewer(reviewer4));
-        assertFalse(escrow.isReviewer(reviewer5));
-        assertEq(escrow.getReviewerPool().length, 0);
+        assertEq(ejectedCount, 5);
     }
 
-    function test_ReviewerCanReRegisterAfterAutoEject() public {
-        address[10] memory buyers;
-        address[10] memory sellers;
+    function test_RevertReRegister_MustWaitForNewPoolCycle() public {
+        _registerReviewers(); // generation = 1
+        _presetCountsTo9();
+
+        // Trigger ejection for the 5 selected
+        address b = address(uint160(0xC001)); address s = address(uint160(0xA002));
+        vm.deal(b, 10 ether); vm.deal(s, 1 ether);
+        _runFullDispute(b, s, 100);
+
+        // Find one ejected reviewer
+        address ejected;
+        address[10] memory rs = [reviewer1, reviewer2, reviewer3, reviewer4, reviewer5,
+                                  reviewer6, reviewer7, reviewer8, reviewer9, reviewer10];
         for (uint256 i = 0; i < 10; i++) {
-            buyers[i]  = address(uint160(0xC000 + i));
-            sellers[i] = address(uint160(0xD000 + i));
-            vm.deal(buyers[i],  10 ether);
-            vm.deal(sellers[i], 1 ether);
+            if (!escrow.isReviewer(rs[i])) { ejected = rs[i]; break; }
         }
+        assertTrue(ejected != address(0));
 
-        _registerReviewers();
-
-        // Run 10 disputes → auto-eject all reviewers
-        for (uint256 i = 0; i < 10; i++) {
-            _runFullDispute(buyers[i], sellers[i], 100);
-        }
-
-        assertFalse(escrow.isReviewer(reviewer1));
-
-        // reviewer1 re-registers — count resets to 0
-        vm.prank(reviewer1);
+        // Cannot re-register immediately — poolGeneration (1) == ejectedAtGeneration (1)
+        vm.prank(ejected);
+        vm.expectRevert("Wait for new pool cycle");
         escrow.registerAsReviewer();
+    }
 
-        assertTrue(escrow.isReviewer(reviewer1));
-        assertEq(escrow.reviewerDisputeCount(reviewer1), 0);
+    function test_ReviewerCanReRegisterAfterNewCycle() public {
+        _registerReviewers(); // generation = 1
+        _presetCountsTo9();
+
+        address b = address(uint160(0xC002)); address s = address(uint160(0xA003));
+        vm.deal(b, 10 ether); vm.deal(s, 1 ether);
+        _runFullDispute(b, s, 100); // ejects 5, pool has 5 left
+
+        // Find ejected reviewer
+        address ejected;
+        address[10] memory rs = [reviewer1, reviewer2, reviewer3, reviewer4, reviewer5,
+                                  reviewer6, reviewer7, reviewer8, reviewer9, reviewer10];
+        for (uint256 i = 0; i < 10; i++) {
+            if (!escrow.isReviewer(rs[i])) { ejected = rs[i]; break; }
+        }
+
+        // Fill the 5 empty spots with new reviewers → pool reaches 10 → generation advances to 2
+        for (uint256 i = 0; i < 5; i++) {
+            address nr = address(uint160(0x5000 + i));
+            vm.prank(nr);
+            escrow.registerAsReviewer();
+        }
+        assertEq(escrow.poolGeneration(), 2);
+
+        // One reviewer voluntarily leaves → spot opens
+        vm.prank(address(uint160(0x5000)));
+        escrow.removeFromPool();
+
+        // Ejected reviewer can now re-register (gen 2 > ejectedAtGeneration 1)
+        vm.prank(ejected);
+        escrow.registerAsReviewer();
+        assertTrue(escrow.isReviewer(ejected));
+        assertEq(escrow.reviewerDisputeCount(ejected), 0);
     }
 
     function test_AutoEject_DoesNotEjectReviewersBelow10() public {
-        // reviewers 1-5 registered; run only 5 disputes
-        address[5] memory buyers2;
-        address[5] memory sellers2;
-        for (uint256 i = 0; i < 5; i++) {
-            buyers2[i]  = address(uint160(0xE000 + i));
-            sellers2[i] = address(uint160(0xF000 + i));
-            vm.deal(buyers2[i],  10 ether);
-            vm.deal(sellers2[i], 1 ether);
+        _registerReviewers(); // pool = 10
+
+        // Set counts to 8 — one dispute will bring them to 9 max (5 selected)
+        address[10] memory rs = [reviewer1, reviewer2, reviewer3, reviewer4, reviewer5,
+                                  reviewer6, reviewer7, reviewer8, reviewer9, reviewer10];
+        for (uint256 i = 0; i < 10; i++) {
+            stdstore.target(address(escrow))
+                .sig("reviewerDisputeCount(address)")
+                .with_key(rs[i])
+                .checked_write(uint256(8));
         }
 
-        _registerReviewers();
-        for (uint256 i = 0; i < 5; i++) {
-            _runFullDispute(buyers2[i], sellers2[i], 100);
-        }
+        address b = address(uint160(0xE001)); address s = address(uint160(0xF001));
+        vm.deal(b, 10 ether); vm.deal(s, 1 ether);
+        _runFullDispute(b, s, 100); // selected reviewers go to 9, not ejected
 
-        // Count = 5, still in pool
+        // All still in pool
+        assertEq(escrow.getReviewerPool().length, 10);
         assertTrue(escrow.isReviewer(reviewer1));
-        assertEq(escrow.reviewerDisputeCount(reviewer1), 5);
-        assertEq(escrow.getReviewerPool().length, 5);
     }
 
-    function test_AutoEject_ReplacedByNewReviewer() public {
-        // After auto-eject, a new reviewer can join to replace the slot
-        address[10] memory buyers;
-        address[10] memory sellers;
-        for (uint256 i = 0; i < 10; i++) {
-            buyers[i]  = address(uint160(0x2000 + i));
-            sellers[i] = address(uint160(0x3000 + i));
-            vm.deal(buyers[i],  10 ether);
-            vm.deal(sellers[i], 1 ether);
-        }
+    function test_AutoEject_NewReviewerCanJoin() public {
+        _registerReviewers(); // generation = 1
+        _presetCountsTo9();
 
-        _registerReviewers();
-        for (uint256 i = 0; i < 10; i++) {
-            _runFullDispute(buyers[i], sellers[i], 100);
-        }
+        address b = address(uint160(0x2001)); address s = address(uint160(0x3001));
+        vm.deal(b, 10 ether); vm.deal(s, 1 ether);
+        _runFullDispute(b, s, 100); // 5 ejected, pool = 5
 
-        assertEq(escrow.getReviewerPool().length, 0);
+        assertEq(escrow.getReviewerPool().length, 5);
 
-        // New reviewer joins
+        // New reviewer with no deal history can join immediately
         address newReviewer = makeAddr("newReviewer");
         vm.prank(newReviewer);
         escrow.registerAsReviewer();
 
         assertTrue(escrow.isReviewer(newReviewer));
-        assertEq(escrow.getReviewerPool().length, 1);
         assertEq(escrow.reviewerDisputeCount(newReviewer), 0);
+        assertEq(escrow.getReviewerPool().length, 6);
     }
 }

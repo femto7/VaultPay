@@ -74,8 +74,11 @@ contract VaultPayEscrow is ReentrancyGuard {
     mapping(uint256 => DisputeVoting) public disputeVotings;
 
     address[] public reviewerPool;
-    mapping(address => bool) public isReviewer;
-    mapping(address => uint256) public reviewerDisputeCount; // resets on re-registration
+    mapping(address => bool)    public isReviewer;
+    mapping(address => bool)    public hasBeenParty;           // ever buyer or seller → banned from pool
+    mapping(address => uint256) public reviewerDisputeCount;   // selections since last registration
+    mapping(address => uint256) public ejectedAtGeneration;    // generation when auto-ejected (0 = never)
+    uint256 public poolGeneration;                             // increments each time pool fills to 10
 
     // ─── Events ──────────────────────────────────────────────────────────
     event DealCreated(uint256 indexed dealId, address indexed buyer, address indexed seller, uint256 amount);
@@ -130,14 +133,26 @@ contract VaultPayEscrow is ReentrancyGuard {
 
     // ─── Reviewer Pool ───────────────────────────────────────────────────
 
-    /// @notice Anyone can join the reviewer pool (max 10 reviewers). Resets dispute counter.
+    /// @notice Join the reviewer pool (max 10). Banned if you've ever been a deal party.
+    ///         After auto-eject, must wait for the pool to fill to 10 again before re-joining.
     function registerAsReviewer() external {
         require(!isReviewer[msg.sender], "Already a reviewer");
+        require(!hasBeenParty[msg.sender], "Deal parties cannot be reviewers");
         require(reviewerPool.length < MAX_REVIEWERS, "Reviewer pool full");
 
+        // After auto-eject: must wait until a new full pool generation has completed
+        if (ejectedAtGeneration[msg.sender] > 0) {
+            require(poolGeneration > ejectedAtGeneration[msg.sender], "Wait for new pool cycle");
+        }
+
         isReviewer[msg.sender] = true;
-        reviewerDisputeCount[msg.sender] = 0; // fresh cycle on each registration
+        reviewerDisputeCount[msg.sender] = 0;
         reviewerPool.push(msg.sender);
+
+        // Pool just became full → advance generation (enables ejected reviewers to re-register next time)
+        if (reviewerPool.length == MAX_REVIEWERS) {
+            poolGeneration++;
+        }
 
         emit ReviewerRegistered(msg.sender);
     }
@@ -201,6 +216,15 @@ contract VaultPayEscrow is ReentrancyGuard {
             status: DealStatus.Created
         });
 
+        // Seller is now a deal party — banned from reviewer pool permanently
+        if (!hasBeenParty[msg.sender]) {
+            hasBeenParty[msg.sender] = true;
+            if (isReviewer[msg.sender]) {
+                _removeFromPool(msg.sender);
+                emit ReviewerRemoved(msg.sender);
+            }
+        }
+
         emit DealCreated(dealId, _buyer, msg.sender, _amount);
     }
 
@@ -230,6 +254,15 @@ contract VaultPayEscrow is ReentrancyGuard {
         deal.fundedAt = block.timestamp;
         deal.deliveryDeadline = block.timestamp + deal.deliveryDays * 1 days;
         deal.status = DealStatus.Funded;
+
+        // Buyer is now a deal party — banned from reviewer pool permanently
+        if (!hasBeenParty[msg.sender]) {
+            hasBeenParty[msg.sender] = true;
+            if (isReviewer[msg.sender]) {
+                _removeFromPool(msg.sender);
+                emit ReviewerRemoved(msg.sender);
+            }
+        }
 
         emit DealFunded(dealId, totalRequired);
     }
@@ -283,15 +316,9 @@ contract VaultPayEscrow is ReentrancyGuard {
         if (deal.status == DealStatus.Delivered) {
             require(block.timestamp <= deal.disputeDeadline, "Dispute window closed");
         }
-        // Count eligible reviewers (exclude the deal's buyer and seller)
-        uint256 eligibleCount = 0;
+        // Pool must be full (10 reviewers) before any dispute can be opened
         uint256 poolLen = reviewerPool.length;
-        for (uint256 i = 0; i < poolLen; i++) {
-            if (reviewerPool[i] != deal.buyer && reviewerPool[i] != deal.seller) {
-                eligibleCount++;
-            }
-        }
-        require(eligibleCount >= PANEL_SIZE, "Not enough eligible reviewers");
+        require(poolLen == MAX_REVIEWERS, "Reviewer pool must be full");
 
         deal.status = DealStatus.Disputed;
         disputes[dealId] = Dispute({
@@ -318,11 +345,9 @@ contract VaultPayEscrow is ReentrancyGuard {
             uint256 idx = uint256(seed) % poolLen;
             address candidate = reviewerPool[idx];
 
-            // Skip deal parties (conflict of interest)
-            bool isParty = (candidate == deal.buyer || candidate == deal.seller);
-
             // Ensure uniqueness within the panel
-            bool alreadyPicked = false;
+            // (parties are already banned from the pool at registration — double-check for safety)
+            bool alreadyPicked = (candidate == deal.buyer || candidate == deal.seller);
             for (uint256 k = 0; k < selected; k++) {
                 if (voting.reviewers[k] == candidate) {
                     alreadyPicked = true;
@@ -330,7 +355,7 @@ contract VaultPayEscrow is ReentrancyGuard {
                 }
             }
 
-            if (!isParty && !alreadyPicked) {
+            if (!alreadyPicked) {
                 voting.reviewers[selected] = candidate;
                 reviewerDisputeCount[candidate]++;
                 selected++;
@@ -480,6 +505,7 @@ contract VaultPayEscrow is ReentrancyGuard {
             if (reviewer != address(0) && isReviewer[reviewer]
                 && reviewerDisputeCount[reviewer] >= MAX_DISPUTES_PER_CYCLE)
             {
+                ejectedAtGeneration[reviewer] = poolGeneration; // must wait for next full pool cycle
                 _removeFromPool(reviewer);
                 emit ReviewerAutoEjected(reviewer, reviewerDisputeCount[reviewer]);
             }
